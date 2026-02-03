@@ -28,7 +28,7 @@ firmware/
 │   ├── __init__.py
 │   ├── ads1115.py              # Custom I2C driver (YOUR CODE - spec #10)
 │   ├── fsr408.py               # FSR interface + calibration (YOUR CODE)
-│   └── mpu6050.py              # EMPTY - Placeholder for accelerometer team
+│   └── accelerometer.py              # EMPTY - Placeholder for accelerometer team
 ├── processing/
 │   ├── __init__.py
 │   └── sleep_detector.py       # State machine logic (refactored from main.py)
