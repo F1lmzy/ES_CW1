@@ -19,8 +19,8 @@ import signal
 import logging
 from pathlib import Path
 
-# Add firmware directory to path
-sys.path.insert(0, str(Path(__file__).parent / "firmware"))
+# Add parent directory to path so we can import firmware modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # === YOUR IMPLEMENTATIONS ===
 from firmware.sensors.ads1115 import ADS1115, ADS1115Error
@@ -80,16 +80,16 @@ def signal_handler(sig, frame):
 def initialize_components():
     """
     Initialize all hardware and software components.
-    
+
     Returns:
         Dictionary with initialized components
     """
     logger.info("=" * 60)
     logger.info("SleepSense Pro - Smart Bed Monitor")
     logger.info("=" * 60)
-    
+
     components = {}
-    
+
     # 1. Initialize I2C bus and ADC
     logger.info("[1/5] Initializing I2C bus and ADS1115 ADC...")
     try:
@@ -103,7 +103,7 @@ def initialize_components():
     except Exception as e:
         logger.error(f"Failed to initialize ADC: {e}")
         raise
-    
+
     # 2. Initialize data manager
     logger.info("[2/5] Initializing data manager...")
     try:
@@ -117,7 +117,7 @@ def initialize_components():
     except Exception as e:
         logger.error(f"Failed to initialize data manager: {e}")
         raise
-    
+
     # 3. Initialize FSR sensor
     logger.info("[3/5] Initializing FSR408 sensor...")
     try:
@@ -131,7 +131,7 @@ def initialize_components():
     except Exception as e:
         logger.error(f"Failed to initialize FSR: {e}")
         raise
-    
+
     # 4. Check/load calibration
     logger.info("[4/5] Checking calibration...")
     try:
@@ -145,7 +145,7 @@ def initialize_components():
     except Exception as e:
         logger.error(f"Calibration failed: {e}")
         raise
-    
+
     # 5. Initialize sleep detector
     logger.info("[5/5] Initializing sleep detector...")
     try:
@@ -160,7 +160,7 @@ def initialize_components():
     except Exception as e:
         logger.error(f"Failed to initialize sleep detector: {e}")
         raise
-    
+
     # 6. Initialize placeholder components (for team integration)
     logger.info("[6/5] Checking team modules...")
     if MPU6050_AVAILABLE:
@@ -172,7 +172,7 @@ def initialize_components():
             logger.info("○ Accelerometer placeholder (not yet implemented)")
     else:
         logger.info("○ Accelerometer not available (placeholder)")
-    
+
     if MQTT_AVAILABLE:
         try:
             mqtt_client = MQTTClient()
@@ -182,18 +182,18 @@ def initialize_components():
             logger.info("○ MQTT client placeholder (not yet implemented)")
     else:
         logger.info("○ MQTT client not available (placeholder)")
-    
+
     # Print stats
     stats = data_mgr.get_stats()
     logger.info(f"\nDatabase Status:")
     logger.info(f"  Total readings: {stats.get('total_readings', 0)}")
     logger.info(f"  Unsynced readings: {stats.get('unsynced_readings', 0)}")
     logger.info(f"  Database size: {stats.get('database_size_mb', 0)} MB")
-    
+
     logger.info("\n" + "=" * 60)
     logger.info("System Ready - Starting Monitoring Loop")
     logger.info("=" * 60)
-    
+
     return components
 
 
@@ -201,36 +201,36 @@ def sync_unsynced_data(components):
     """
     Sync unsynced data to remote server.
     Called periodically to handle offline functionality (spec #23).
-    
+
     Args:
         components: Dictionary with data_manager and optionally mqtt_client
     """
     data_mgr = components.get('data_manager')
     mqtt_client = components.get('mqtt_client')
-    
+
     if not data_mgr:
         return
-    
+
     # Get unsynced readings
     unsynced = data_mgr.get_unsynced_readings(limit=50)
-    
+
     if not unsynced:
         return
-    
+
     logger.info(f"Found {len(unsynced)} unsynced readings")
-    
+
     if mqtt_client and MQTT_AVAILABLE:
         try:
             # TODO: MQTT team - implement actual sync logic
             # for reading in unsynced:
             #     json_data = data_mgr.to_json(reading)
             #     mqtt_client.publish("sleepsense/data", json_data)
-            
+
             # Mark as synced (for now, assume all successful)
             ids = [r['id'] for r in unsynced]
             data_mgr.mark_synced(ids)
             logger.info(f"Synced {len(ids)} readings to remote")
-            
+
         except Exception as e:
             logger.error(f"Failed to sync data: {e}")
     else:
@@ -240,33 +240,33 @@ def sync_unsynced_data(components):
 def main_loop(components):
     """
     Main monitoring loop.
-    
+
     Runs at 10Hz, collecting sensor data, detecting sleep states,
     storing to SQLite, and preparing JSON for MQTT transmission.
     """
     global _running
-    
+
     fsr = components['fsr']
     detector = components['detector']
     data_mgr = components['data_manager']
     mqtt_client = components.get('mqtt_client')
-    
+
     last_sync = time.time()
-    
+
     # Print header
     print(f"\n{'VOLTAGE':>10} | {'FORCE%':>8} | {'STATE':<18} | {'VAR':>6} | {'INFO'}")
     print("-" * 70)
-    
+
     while _running:
         try:
             # 1. Read sensor data
             voltage = fsr.get_voltage()
             force_pct = fsr.get_force_percentage()
             variance = fsr.get_variance()
-            
+
             # 2. Update sleep state
             state = detector.update(voltage, variance)
-            
+
             # 3. Store to SQLite (offline functionality - spec #23)
             data_mgr.store_reading(
                 voltage=voltage,
@@ -274,32 +274,32 @@ def main_loop(components):
                 state=state.value,
                 variance=variance
             )
-            
+
             # 4. Get JSON for MQTT team (clean API)
             sensor_data = fsr.get_sensor_data()
             sensor_data['state'] = state.value
             json_payload = data_mgr.to_json(sensor_data)
-            
+
             # TODO: MQTT team - publish here
             # if mqtt_client and MQTT_AVAILABLE:
             #     mqtt_client.publish("sleepsense/data", json_payload)
-            
+
             # 5. Display status
             time_still = detector.get_time_since_last_movement()
             info = f"({int(time_still)}s still)" if state == SleepState.ASLEEP else ""
-            
+
             print(f"{voltage:>10.3f}V | {force_pct:>7.1f}% | {state.value:<18} | "
                   f"{variance:>6.3f} | {info}")
-            
+
             # 6. Periodic sync check (spec #23 - offline with sync)
             now = time.time()
             if now - last_sync > SYNC_INTERVAL:
                 sync_unsynced_data(components)
                 last_sync = now
-            
+
             # 7. Sleep until next sample
             time.sleep(SAMPLE_RATE)
-            
+
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received")
             break
@@ -311,13 +311,13 @@ def main_loop(components):
 def shutdown(components):
     """Graceful shutdown and cleanup"""
     logger.info("\nShutting down...")
-    
+
     # Try to sync any remaining data
     try:
         sync_unsynced_data(components)
     except Exception as e:
         logger.error(f"Error during final sync: {e}")
-    
+
     # Close hardware connections
     if 'adc' in components:
         try:
@@ -325,7 +325,7 @@ def shutdown(components):
             logger.info("ADC connection closed")
         except:
             pass
-    
+
     # Print final stats
     if 'data_manager' in components:
         try:
@@ -333,30 +333,30 @@ def shutdown(components):
             logger.info(f"Final database stats: {stats}")
         except:
             pass
-    
+
     logger.info("Shutdown complete. Goodbye!")
 
 
 def main():
     """
     Main entry point (Specification #8)
-    
+
     Initializes all components and runs the monitoring loop.
     Handles graceful shutdown on Ctrl+C.
     """
     global _components
-    
+
     # Set up signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     try:
         # Initialize all components
         _components = initialize_components()
-        
+
         # Run main loop
         main_loop(_components)
-        
+
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         sys.exit(1)
