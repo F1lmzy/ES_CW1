@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SleepSense - Sleep Diary</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-blue: #4a90e2;
+            --header-blue: #5c9ce6;
+            --chart-bg: #345d9d;
+            --dozing-color: #f1c40f; /* Yellow */
+            --snoozing-color: #2ecc71; /* Green/Teal */
+            --slumbering-color: #3498db; /* Blue */
+            --bg-color: #ffffff;
+            --text-color: #2c3e50;
+        }
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 480px; /* Mobile app width */
+            background-color: #fff;
+            min-height: 100vh;
+            position: relative;
+            padding-bottom: 80px;
+        }
+
+        /* Header */
+        .header {
+            background-color: var(--header-blue);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .date-display {
+            font-size: 18px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .zzz-icon {
+            font-weight: 900;
+            font-style: italic;
+        }
+
+        .diary-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Section Title */
+        .section-title {
+            color: var(--header-blue);
+            font-weight: 800;
+            font-size: 18px;
+            margin: 20px 20px 10px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .section-title::before {
+            content: '';
+            display: inline-block;
+            width: 5px;
+            height: 20px;
+            background-color: var(--header-blue);
+            margin-right: 10px;
+            border-radius: 3px;
+        }
+
+        /* Percentage Bar */
+        .percentage-container {
+            margin: 0 20px 20px;
+        }
+
+        .percentage-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .p-label span { margin-left: 5px; color: #333; }
+        .c-dozing { color: var(--dozing-color); }
+        .c-snoozing { color: var(--snoozing-color); }
+        .c-slumbering { color: var(--slumbering-color); }
+
+        .progress-bar {
+            height: 10px;
+            width: 100%;
+            background-color: #eee;
+            border-radius: 5px;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .bar-segment { height: 100%; transition: width 0.5s ease; }
+        .bg-dozing { background-color: var(--dozing-color); }
+        .bg-snoozing { background-color: var(--snoozing-color); }
+        .bg-slumbering { background-color: var(--slumbering-color); }
+
+        /* Chart Card */
+        .chart-card {
+            background: linear-gradient(180deg, #4b6cb7 0%, #182848 100%);
+            margin: 0 20px 20px;
+            padding: 15px;
+            border-radius: 15px;
+            color: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        /* Stats List */
+        .stats-list {
+            padding: 0 20px;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 15px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .stat-content {
+            flex-grow: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 700;
+        }
+
+        .stat-label { color: #555; font-size: 15px; }
+        .stat-value { font-size: 16px; color: #333; }
+
+        .icon-blue { background-color: #5dade2; }
+        .icon-yellow { background-color: var(--dozing-color); }
+        .icon-teal { background-color: var(--snoozing-color); }
+        .icon-dark-blue { background-color: var(--slumbering-color); }
+
+        /* Connection Panel (Hidden/Config) */
+        .config-toggle {
+            text-align: center;
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+        .config-panel {
+            display: none;
+            padding: 20px;
+            background: #f8f9fa;
+            margin: 10px;
+            border-radius: 8px;
+        }
+        .config-panel.active { display: block; }
+        
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0; right: 0;
+            background: #5c9ce6;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .back-btn {
+            background: white;
+            color: #5c9ce6;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 20px;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Header -->
+    <div class="header">
+        <div class="date-display">
+            <span class="zzz-icon">Zzz</span>
+            <span id="current-date">Monday, Feb 5, 2024</span>
+        </div>
+        <button class="diary-btn">📅 Diary</button>
+    </div>
+
+    <!-- Details Section -->
+    <div class="section-title">Details</div>
+
+    <!-- Percentages -->
+    <div class="percentage-container">
+        <div class="percentage-labels">
+            <div class="p-label c-dozing">Dozing: <span id="pct-dozing">0%</span></div>
+            <div class="p-label c-snoozing">Snoozing: <span id="pct-snoozing">0%</span></div>
+            <div class="p-label c-slumbering">Slumbering: <span id="pct-slumbering">0%</span></div>
+        </div>
+        <div class="progress-bar">
+            <div id="bar-dozing" class="bar-segment bg-dozing" style="width: 0%"></div>
+            <div id="bar-snoozing" class="bar-segment bg-snoozing" style="width: 0%"></div>
+            <div id="bar-slumbering" class="bar-segment bg-slumbering" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <!-- Graph -->
+    <div class="chart-card">
+        <canvas id="sleepChart" height="200"></canvas>
+    </div>
+
+    <!-- Toggle Buttons (Mock UI) -->
+    <div style="padding: 0 20px; display: flex; gap: 10px; margin-bottom: 20px;">
+        <button style="flex: 1; padding: 10px; background: #5c9ce6; color: white; border: none; border-radius: 8px; font-weight: bold;">Sleep</button>
+        <button style="flex: 1; padding: 10px; background: #f0f2f5; color: #666; border: none; border-radius: 8px; font-weight: bold;">Sounds</button>
+    </div>
+
+    <!-- Stats List -->
+    <div class="stats-list">
+        <div class="stat-item">
+            <div class="stat-icon icon-blue">🕒</div>
+            <div class="stat-content">
+                <span class="stat-label">Time to fall asleep</span>
+                <span class="stat-value" id="time-to-sleep">-- mins</span>
+            </div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-icon icon-yellow">Zzz</div>
+            <div class="stat-content">
+                <span class="stat-label">Dozing time</span>
+                <span class="stat-value" id="time-dozing">0 hrs 0 mins</span>
+            </div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-icon icon-teal">Zzz</div>
+            <div class="stat-content">
+                <span class="stat-label">Snoozing time</span>
+                <span class="stat-value" id="time-snoozing">0 hrs 0 mins</span>
+            </div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-icon icon-dark-blue">Zzz</div>
+            <div class="stat-content">
+                <span class="stat-label">Slumbering time</span>
+                <span class="stat-value" id="time-slumbering">0 hrs 0 mins</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Config (Hidden by default) -->
+    <div class="config-toggle" onclick="document.getElementById('config').classList.toggle('active')">
+        ⚙️ Connection Settings <span id="conn-status" style="color:red">●</span>
+    </div>
+    <div id="config" class="config-panel">
+        <input type="text" id="host" value="broker.hivemq.com" style="width: 100%; margin-bottom: 5px;" placeholder="Host">
+        <input type="number" id="port" value="8000" style="width: 100%; margin-bottom: 5px;" placeholder="Port">
+        <input type="text" id="topic" value="sleepsense/user_001/rpi_node_1/sensors/fsr408" style="width: 100%; margin-bottom: 5px;" placeholder="Topic">
+        <button onclick="startConnection()" style="width: 100%; padding: 5px;">Reconnect</button>
+    </div>
+
+    <div class="bottom-nav">
+        <button class="back-btn">Back</button>
+    </div>
+</div>
+
+<script>
+    // --- Configuration ---
+    let client = null;
+    const history = []; // Store raw data points
+    let chart;
+    
+    // Mapping constants
+    const STATE_MAP = {
+        'Empty Bed': 0, // No data / gap
+        'Present (Awake)': 3, // Dozing
+        'Tossing/Turning': 3, // Dozing
+        'Asleep': 2, // Snoozing (default)
+        // Slumbering (1) is derived from Asleep + Low Variance
+    };
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        // Set date
+        const now = new Date();
+        const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
+        document.getElementById('current-date').innerText = now.toLocaleDateString('en-US', options);
+
+        initChart();
+        startConnection();
+    });
+
+    // --- MQTT Logic ---
+    function startConnection() {
+        const host = document.getElementById('host').value;
+        const port = parseInt(document.getElementById('port').value);
+        const clientId = "sleepsense_ui_" + Math.random().toString(16).substr(2, 8);
+        const topic = document.getElementById('topic').value;
+
+        if (client) { try { client.disconnect(); } catch(e){} }
+
+        client = new Paho.MQTT.Client(host, port, clientId);
+        client.onConnectionLost = (resp) => {
+            console.log("Connection lost", resp);
+            document.getElementById('conn-status').style.color = "red";
+        };
+        client.onMessageArrived = (msg) => {
+            try {
+                const payload = JSON.parse(msg.payloadString);
+                processData(payload);
+            } catch (e) { console.error(e); }
+        };
+
+        client.connect({
+            onSuccess: () => {
+                console.log("Connected");
+                document.getElementById('conn-status').style.color = "green";
+                client.subscribe(topic);
+            },
+            onFailure: (e) => {
+                console.error("Failed to connect", e);
+                alert("Connection failed: " + e.errorMessage);
+            },
+            useSSL: false // HiveMQ WS usually doesn't need SSL for port 8000
+        });
+    }
+
+    // --- Data Processing ---
+    function processData(data) {
+        // 1. Determine Sleep Stage (Dozing=3, Snoozing=2, Slumbering=1)
+        let stage = 3; // Default Awake
+        let stageName = 'dozing';
+        
+        const rawState = data.state; // "Asleep", "Present (Awake)", "Tossing/Turning"
+        
+        if (rawState === "Empty Bed") return; // Ignore empty for stats? Or treat as awake?
+
+        if (rawState === "Asleep") {
+            // Check variance for Slumbering (Deep Sleep)
+            // Threshold is arbitrary here, assuming device sends good variance
+            if (data.variance < 0.008) { 
+                stage = 1; 
+                stageName = 'slumbering';
+            } else {
+                stage = 2; 
+                stageName = 'snoozing';
+            }
+        } else {
+            // Awake or Moving
+            stage = 3;
+            stageName = 'dozing';
+        }
+
+        const point = {
+            x: new Date().getTime(), // Use reception time or data.timestamp if valid
+            y: stage,
+            stage: stageName
+        };
+
+        history.push(point);
+        
+        // Keep history manageable (e.g., last 1000 points)
+        if (history.length > 2000) history.shift();
+
+        updateStats();
+        updateChart();
+    }
+
+    // --- Stats Calculation ---
+    function updateStats() {
+        if (history.length === 0) return;
+
+        let counts = { dozing: 0, snoozing: 0, slumbering: 0 };
+        let total = 0;
+
+        // Basic count approximation (assuming roughly equal sample intervals)
+        // For better accuracy, we should use time deltas between points
+        history.forEach(pt => {
+            counts[pt.stage]++;
+            total++;
+        });
+
+        // 1. Update Percentages
+        const pDoz = Math.round((counts.dozing / total) * 100);
+        const pSno = Math.round((counts.snoozing / total) * 100);
+        const pSlu = Math.round((counts.slumbering / total) * 100);
+
+        document.getElementById('pct-dozing').innerText = pDoz + "%";
+        document.getElementById('pct-snoozing').innerText = pSno + "%";
+        document.getElementById('pct-slumbering').innerText = pSlu + "%";
+
+        document.getElementById('bar-dozing').style.width = pDoz + "%";
+        document.getElementById('bar-snoozing').style.width = pSno + "%";
+        document.getElementById('bar-slumbering').style.width = pSlu + "%";
+
+        // 2. Update Times (Assuming 1Hz or similar, we need sample rate)
+        // We will approximate based on (Total Duration / Total Points) * Count
+        const startTime = history[0].x;
+        const endTime = history[history.length-1].x;
+        const totalDurationMs = endTime - startTime;
+        
+        if (totalDurationMs > 0) {
+            const formatTime = (ms) => {
+                const mins = Math.floor(ms / 60000);
+                const hrs = Math.floor(mins / 60);
+                const remMins = mins % 60;
+                return hrs > 0 ? `${hrs} hrs ${remMins} mins` : `${remMins} mins`;
+            };
+
+            const msPerPoint = totalDurationMs / total;
+
+            document.getElementById('time-dozing').innerText = formatTime(counts.dozing * msPerPoint);
+            document.getElementById('time-snoozing').innerText = formatTime(counts.snoozing * msPerPoint);
+            document.getElementById('time-slumbering').innerText = formatTime(counts.slumbering * msPerPoint);
+        }
+
+        // 3. Time to Fall Asleep
+        // Find first transition from Dozing (3) to Snoozing (2) or Slumbering (1)
+        const firstSleepIndex = history.findIndex(pt => pt.y < 3);
+        if (firstSleepIndex > 0) {
+            const timeToSleepMs = history[firstSleepIndex].x - history[0].x;
+            const mins = Math.floor(timeToSleepMs / 60000);
+            document.getElementById('time-to-sleep').innerText = mins + " mins";
+        } else if (firstSleepIndex === 0) {
+             document.getElementById('time-to-sleep').innerText = "0 mins";
+        } else {
+             document.getElementById('time-to-sleep').innerText = "-- mins";
+        }
+    }
+
+    // --- Chart ---
+    function initChart() {
+        const ctx = document.getElementById('sleepChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Sleep Stage',
+                    data: [],
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                    stepped: true, // Key for hypnogram look
+                    pointRadius: 0,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'minute'
+                        },
+                        grid: { display: false, color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: 'rgba(255,255,255,0.7)' }
+                    },
+                    y: {
+                        min: 0.5,
+                        max: 3.5,
+                        ticks: {
+                            callback: function(value) {
+                                if (value === 3) return 'Doz.';
+                                if (value === 2) return 'Snooz.';
+                                if (value === 1) return 'Slumb.';
+                                return '';
+                            },
+                            color: 'rgba(255,255,255,0.8)',
+                            font: { size: 12 }
+                        },
+                        grid: {
+                            color: 'rgba(255,255,255,0.1)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+
+    function updateChart() {
+        if (!chart) return;
+        chart.data.datasets[0].data = history;
+        chart.update('none'); // Update without full animation for performance
+    }
+
+</script>
+</body>
+</html>
