@@ -238,13 +238,28 @@ class FSR408:
         try:
             voltage = self.adc.read_voltage(self.channel)
             self._last_reading = voltage
+
+            # Warn if voltage is suspiciously low (likely hardware issue)
+            if voltage < 0.01 and self._last_reading == 0.0:
+                logger.warning(
+                    f"FSR voltage reading is {voltage:.4f}V on channel {self.channel}. "
+                    "This may indicate:\n"
+                    "  - FSR not connected or broken (open circuit)\n"
+                    "  - Voltage divider not powered (VCC disconnected)\n"
+                    "  - Wrong channel selected\n"
+                    "  - Ground not connected properly\n"
+                    "Run tests/debug_fsr408.py for detailed diagnostics."
+                )
+
             return voltage
         except ADS1115Error as e:
-            logger.error(f"Failed to read FSR voltage: {e}")
+            logger.error(f"Failed to read FSR voltage on channel {self.channel}: {e}")
+            logger.error(f"Returning last known value: {self._last_reading:.4f}V")
             # Return last known good value
             return self._last_reading
         except Exception as e:
-            logger.error(f"Unexpected error reading FSR: {e}")
+            logger.error(f"Unexpected error reading FSR on channel {self.channel}: {e}")
+            logger.error(f"Returning last known value: {self._last_reading:.4f}V")
             return self._last_reading
 
     def get_force_percentage(self) -> float:
