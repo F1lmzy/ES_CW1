@@ -13,25 +13,26 @@ Architecture:
 - Offline functionality: Local storage with sync tracking
 """
 
-import time
-import sys
-import signal
 import logging
+import signal
+import sys
+import time
 from pathlib import Path
 
 # Add parent directory to path so we can import firmware modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # === YOUR IMPLEMENTATIONS ===
+from firmware.communication.supabase_client import SupabaseClient
+from firmware.data.data_manager import DataManager, DataManagerError
+from firmware.processing.sleep_detector import SleepDetector, SleepState
 from firmware.sensors.ads1115 import ADS1115, ADS1115Error
 from firmware.sensors.fsr408 import FSR408, FSR408Error
-from firmware.processing.sleep_detector import SleepDetector, SleepState
-from firmware.data.data_manager import DataManager, DataManagerError
-from firmware.communication.supabase_client import SupabaseClient
 
 # === PLACEHOLDERS FOR TEAM MEMBERS ===
 try:
     from firmware.sensors.mpu6050 import MPU6050  # Accelerometer team
+
     MPU6050_AVAILABLE = True
 except ImportError:
     MPU6050_AVAILABLE = False
@@ -49,20 +50,19 @@ ADS1115_ADDRESS = 0x48
 FSR_CHANNEL = 0
 
 # SUPABASE CONFIGURATION (Replace with your actual project details)
-SUPABASE_URL = "https://your-project-id.supabase.co"
-SUPABASE_KEY = "your-anon-key-here"
+SUPABASE_URL = "https://sntezuencvibrziosdlr.supabase.co"
+SUPABASE_KEY = "sb_publishable_5wIf1WidbsAHePKBkT1qMg_DgNgHVy5"
 
 SAMPLE_RATE = 0.1  # 10 Hz
-SYNC_INTERVAL = 10  # Check for unsynced data every 10 seconds (more frequent for live feel)
+SYNC_INTERVAL = (
+    10  # Check for unsynced data every 10 seconds (more frequent for live feel)
+)
 
 # === LOGGING SETUP ===
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('sleepsense.log')
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("sleepsense.log")],
 )
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ def initialize_components():
             logger.warning("ADS1115 not detected! Check I2C connection.")
             logger.info("Continuing in mock mode...")
             adc = ADS1115(bus=I2C_BUS, address=ADS1115_ADDRESS, mock=True)
-        components['adc'] = adc
+        components["adc"] = adc
         logger.info(f"✓ ADS1115 initialized on bus {I2C_BUS}")
     except Exception as e:
         logger.error(f"Failed to initialize ADC: {e}")
@@ -108,12 +108,8 @@ def initialize_components():
     # 2. Initialize data manager
     logger.info("[2/5] Initializing data manager...")
     try:
-        data_mgr = DataManager(
-            db_path=DB_PATH,
-            device_id=DEVICE_ID,
-            user_id=USER_ID
-        )
-        components['data_manager'] = data_mgr
+        data_mgr = DataManager(db_path=DB_PATH, device_id=DEVICE_ID, user_id=USER_ID)
+        components["data_manager"] = data_mgr
         logger.info(f"✓ DataManager initialized: {DB_PATH}")
     except Exception as e:
         logger.error(f"Failed to initialize data manager: {e}")
@@ -123,11 +119,11 @@ def initialize_components():
     logger.info("[3/5] Initializing FSR408 sensor...")
     try:
         fsr = FSR408(
-            adc=components['adc'],
+            adc=components["adc"],
             channel=FSR_CHANNEL,
-            data_manager=components['data_manager']
+            data_manager=components["data_manager"],
         )
-        components['fsr'] = fsr
+        components["fsr"] = fsr
         logger.info(f"✓ FSR408 initialized on channel {FSR_CHANNEL}")
     except Exception as e:
         logger.error(f"Failed to initialize FSR: {e}")
@@ -151,12 +147,14 @@ def initialize_components():
     logger.info("[5/5] Initializing sleep detector...")
     try:
         cal = fsr.get_calibration()
-        detector = SleepDetector({
-            'empty_threshold': cal['baseline_voltage'] + 0.2,
-            'movement_threshold': cal['movement_threshold'],
-            'sleep_delay': 60
-        })
-        components['detector'] = detector
+        detector = SleepDetector(
+            {
+                "empty_threshold": cal["baseline_voltage"] + 0.2,
+                "movement_threshold": cal["movement_threshold"],
+                "sleep_delay": 60,
+            }
+        )
+        components["detector"] = detector
         logger.info("✓ SleepDetector initialized")
     except Exception as e:
         logger.error(f"Failed to initialize sleep detector: {e}")
@@ -167,7 +165,7 @@ def initialize_components():
     if MPU6050_AVAILABLE:
         try:
             accelerometer = MPU6050()
-            components['accelerometer'] = accelerometer
+            components["accelerometer"] = accelerometer
             logger.info("✓ Accelerometer module loaded")
         except NotImplementedError:
             logger.info("○ Accelerometer placeholder (not yet implemented)")
@@ -178,11 +176,13 @@ def initialize_components():
     logger.info("[6/5] Initializing Supabase client...")
     try:
         supabase = SupabaseClient(SUPABASE_URL, SUPABASE_KEY)
-        components['supabase'] = supabase
+        components["supabase"] = supabase
         if supabase.is_configured():
             logger.info("✓ Supabase client configured")
         else:
-            logger.warning("! Supabase client has placeholder credentials. Update SUPABASE_URL/KEY.")
+            logger.warning(
+                "! Supabase client has placeholder credentials. Update SUPABASE_URL/KEY."
+            )
     except Exception as e:
         logger.error(f"Failed to initialize Supabase client: {e}")
 
@@ -208,8 +208,8 @@ def sync_unsynced_data(components):
     Args:
         components: Dictionary with data_manager and supabase client
     """
-    data_mgr = components.get('data_manager')
-    supabase = components.get('supabase')
+    data_mgr = components.get("data_manager")
+    supabase = components.get("supabase")
 
     if not data_mgr or not supabase:
         return
@@ -229,10 +229,10 @@ def sync_unsynced_data(components):
             # Clean up the reading dictionary if necessary (DataManager usually returns row dicts)
             # SupabaseClient handles key filtering, but let's ensure types are native Python
             # (sqlite3.Row might behave oddly with some json serializers if not cast)
-            reading_dict = dict(reading) 
-            
+            reading_dict = dict(reading)
+
             if supabase.insert_reading(reading_dict):
-                data_mgr.mark_synced([reading['id']])
+                data_mgr.mark_synced([reading["id"]])
                 synced_count += 1
             else:
                 # Stop on first error to prevent hammering logic or preserve order
@@ -255,9 +255,9 @@ def main_loop(components):
     """
     global _running
 
-    fsr = components['fsr']
-    detector = components['detector']
-    data_mgr = components['data_manager']
+    fsr = components["fsr"]
+    detector = components["detector"]
+    data_mgr = components["data_manager"]
     # supabase client is accessed in sync_unsynced_data
 
     last_sync = time.time()
@@ -281,15 +281,17 @@ def main_loop(components):
                 voltage=voltage,
                 force_percent=force_pct,
                 state=state.value,
-                variance=variance
+                variance=variance,
             )
 
             # 4. Display status
             time_still = detector.get_time_since_last_movement()
             info = f"({int(time_still)}s still)" if state == SleepState.ASLEEP else ""
 
-            print(f"{voltage:>10.3f}V | {force_pct:>7.1f}% | {state.value:<18} | "
-                  f"{variance:>6.3f} | {info}")
+            print(
+                f"{voltage:>10.3f}V | {force_pct:>7.1f}% | {state.value:<18} | "
+                f"{variance:>6.3f} | {info}"
+            )
 
             # 5. Periodic sync check (spec #23 - offline with sync)
             now = time.time()
@@ -319,17 +321,17 @@ def shutdown(components):
         logger.error(f"Error during final sync: {e}")
 
     # Close hardware connections
-    if 'adc' in components:
+    if "adc" in components:
         try:
-            components['adc'].close()
+            components["adc"].close()
             logger.info("ADC connection closed")
         except:
             pass
 
     # Print final stats
-    if 'data_manager' in components:
+    if "data_manager" in components:
         try:
-            stats = components['data_manager'].get_stats()
+            stats = components["data_manager"].get_stats()
             logger.info(f"Final database stats: {stats}")
         except:
             pass
