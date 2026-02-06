@@ -17,6 +17,7 @@ import logging
 import signal
 import sys
 import time
+from collections import deque
 from pathlib import Path
 
 # Add parent directory to path so we can import firmware modules
@@ -215,35 +216,32 @@ def sync_unsynced_data(components):
         return
 
     # Get unsynced readings
-    unsynced = data_mgr.get_unsynced_readings(limit=50)
+    # Increased limit to 100 for better batch efficiency
+    unsynced = data_mgr.get_unsynced_readings(limit=100)
 
     if not unsynced:
         return
 
     logger.info(f"Found {len(unsynced)} unsynced readings")
 
-    # Sync loop
-    synced_count = 0
-    for reading in unsynced:
-        try:
-            # Clean up the reading dictionary if necessary (DataManager usually returns row dicts)
-            # SupabaseClient handles key filtering, but let's ensure types are native Python
-            # (sqlite3.Row might behave oddly with some json serializers if not cast)
-            reading_dict = dict(reading)
-
-            if supabase.insert_reading(reading_dict):
-                data_mgr.mark_synced([reading["id"]])
-                synced_count += 1
+    try:
+        # Convert sqlite3.Row objects to standard list of dicts for JSON serialization
+        # and batch insert via SupabaseClient
+        readings_list = [dict(row) for row in unsynced]
+        
+        # Use insert_batch for network optimization
+        if supabase.insert_batch(readings_list):
+            # If batch upload succeeds, mark all as synced locally
+            ids = [r["id"] for r in readings_list]
+            if data_mgr.mark_synced(ids):
+                logger.info(f"Successfully synced {len(ids)} readings in batch")
             else:
-                # Stop on first error to prevent hammering logic or preserve order
-                logger.warning("Failed to sync reading, stopping batch.")
-                break
-        except Exception as e:
-            logger.error(f"Error syncing reading {reading.get('id')}: {e}")
-            break
+                logger.error("Batch upload succeeded but failed to mark local records as synced")
+        else:
+            logger.warning("Batch sync failed (server returned error)")
 
-    if synced_count > 0:
-        logger.info(f"Synced {synced_count} readings to remote")
+    except Exception as e:
+        logger.error(f"Error during batch sync: {e}")
 
 
 def main_loop(components):
@@ -251,7 +249,7 @@ def main_loop(components):
     Main monitoring loop.
 
     Runs at 10Hz, collecting sensor data, detecting sleep states,
-    storing to SQLite, and preparing JSON for MQTT transmission.
+    and storing to SQLite using Variance-Based Event Logging.
     """
     global _running
 
@@ -261,9 +259,16 @@ def main_loop(components):
     # supabase client is accessed in sync_unsynced_data
 
     last_sync = time.time()
+    
+    # Event Logging State Machine
+    # Pre-roll buffer: holds last 0.5s of data (5 samples at 10Hz)
+    buffer = deque(maxlen=5)
+    is_recording = False
+    post_roll_counter = 0
+    POST_ROLL_SAMPLES = 5  # 0.5s post-roll
 
     # Print header
-    print(f"\n{'VOLTAGE':>10} | {'FORCE%':>8} | {'STATE':<18} | {'VAR':>6} | {'INFO'}")
+    print(f"\n{'VOLTAGE':>10} | {'FORCE%':>8} | {'STATE':<18} | {'VAR':>6} | {'REC'}")
     print("-" * 70)
 
     while _running:
@@ -275,22 +280,53 @@ def main_loop(components):
 
             # 2. Update sleep state
             state = detector.update(voltage, variance)
-
-            # 3. Store to SQLite (offline functionality - spec #23)
-            data_mgr.store_reading(
-                voltage=voltage,
-                force_percent=force_pct,
-                state=state.value,
-                variance=variance,
-            )
+            state_val = state.value
+            
+            # 3. Variance-Based Event Logging Logic
+            # Store data in a tuple for buffering
+            current_reading = (voltage, force_pct, state_val, variance)
+            
+            # Threshold from detector config
+            movement_threshold = detector.movement_threshold
+            
+            should_store = False
+            
+            if variance > movement_threshold:
+                # Movement detected!
+                if not is_recording:
+                    # Start of event: Flush pre-roll buffer first
+                    logger.info("Movement detected - Starting Recording")
+                    for buffered_reading in buffer:
+                        data_mgr.store_reading(*buffered_reading)
+                    is_recording = True
+                
+                # While moving, keep recording and reset post-roll
+                should_store = True
+                post_roll_counter = POST_ROLL_SAMPLES
+                
+            else:
+                # No movement
+                if is_recording:
+                    # currently in post-roll phase
+                    should_store = True
+                    post_roll_counter -= 1
+                    if post_roll_counter <= 0:
+                        is_recording = False
+                        logger.info("Movement stopped - Ending Recording")
+                else:
+                    # Idle: just buffer
+                    buffer.append(current_reading)
+            
+            # Store if we are recording
+            if should_store:
+                data_mgr.store_reading(*current_reading)
 
             # 4. Display status
-            time_still = detector.get_time_since_last_movement()
-            info = f"({int(time_still)}s still)" if state == SleepState.ASLEEP else ""
-
+            rec_status = "REC" if is_recording else "..."
+            
             print(
-                f"{voltage:>10.3f}V | {force_pct:>7.1f}% | {state.value:<18} | "
-                f"{variance:>6.3f} | {info}"
+                f"{voltage:>10.3f}V | {force_pct:>7.1f}% | {state_val:<18} | "
+                f"{variance:>6.3f} | {rec_status}"
             )
 
             # 5. Periodic sync check (spec #23 - offline with sync)

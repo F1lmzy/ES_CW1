@@ -11,7 +11,7 @@ Strictly adhering to project constraints:
 import http.client
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -49,13 +49,13 @@ class SupabaseClient:
             "Prefer": "return=minimal",  # Don't send back the inserted object, saves bandwidth
         }
 
-    def _post(self, table: str, payload: Dict[str, Any]) -> bool:
+    def _post(self, table: str, payload: Union[Dict[str, Any], List[Dict[str, Any]]]) -> bool:
         """
         Internal method to execute raw HTTP POST.
 
         Args:
             table: Table name (endpoint)
-            payload: Dictionary data to send
+            payload: Dictionary (single) or List (batch) to send
 
         Returns:
             True if successful (201 Created), False otherwise
@@ -100,32 +100,33 @@ class SupabaseClient:
         Args:
             reading_data: Dictionary matching table schema
         """
-        # Ensure data matches Supabase schema expectations
-        # Convert timestamp to ISO format if it's not already
-        if "timestamp" in reading_data:
-            # Supabase expects 'created_at', but we can map it if needed
-            # For now, let's assume the table has 'timestamp' or we rename it
-            # Standardizing on 'created_at' is better for Supabase
-            reading_data["created_at"] = reading_data.pop("timestamp", None)
+        return self._post("readings", self._clean_data(reading_data))
 
-        # Clean up keys that might not exist in the simple schema
-        # (The schema we designed: id, created_at, device_id, user_id, voltage, force_percent, state, variance)
-        payload = {
-            k: v
-            for k, v in reading_data.items()
-            if k
-            in [
-                "created_at",
-                "device_id",
-                "user_id",
-                "voltage",
-                "force_percent",
-                "state",
-                "variance",
-            ]
-        }
+    def insert_batch(self, readings_data: List[Dict[str, Any]]) -> bool:
+        """
+        Send a batch of sensor readings to the 'readings' table.
+        This is more efficient than sending one by one.
 
-        return self._post("readings", payload)
+        Args:
+            readings_data: List of dictionaries matching table schema
+        """
+        if not readings_data:
+            return True
+            
+        cleaned_batch = [self._clean_data(r) for r in readings_data]
+        return self._post("readings", cleaned_batch)
+
+    def _clean_data(self, reading_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Helper to format data for Supabase schema"""
+        data = reading_data.copy()
+        
+        # Standardize timestamp
+        if 'timestamp' in data:
+            data['created_at'] = data.pop('timestamp', None)
+        
+        # Whitelist keys
+        allowed_keys = ['created_at', 'device_id', 'user_id', 'voltage', 'force_percent', 'state', 'variance']
+        return {k: v for k, v in data.items() if k in allowed_keys}
 
     def is_configured(self) -> bool:
         """Check if URL and Key are set to something non-empty."""
