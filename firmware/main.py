@@ -27,6 +27,7 @@ from firmware.sensors.ads1115 import ADS1115, ADS1115Error
 from firmware.sensors.fsr408 import FSR408, FSR408Error
 from firmware.processing.sleep_detector import SleepDetector, SleepState
 from firmware.data.data_manager import DataManager, DataManagerError
+from firmware.communication.supabase_client import SupabaseClient
 
 # === PLACEHOLDERS FOR TEAM MEMBERS ===
 try:
@@ -36,12 +37,8 @@ except ImportError:
     MPU6050_AVAILABLE = False
     MPU6050 = None
 
-try:
-    from firmware.communication.mqtt_client import MQTTClient  # MQTT team
-    MQTT_AVAILABLE = True
-except ImportError:
-    MQTT_AVAILABLE = False
-    MQTTClient = None
+# MQTT Removed in favor of HTTP/Supabase
+MQTT_AVAILABLE = False
 
 # === CONFIGURATION ===
 DEVICE_ID = "rpi_node_1"
@@ -51,8 +48,12 @@ I2C_BUS = 1
 ADS1115_ADDRESS = 0x48
 FSR_CHANNEL = 0
 
+# SUPABASE CONFIGURATION (Replace with your actual project details)
+SUPABASE_URL = "https://your-project-id.supabase.co"
+SUPABASE_KEY = "your-anon-key-here"
+
 SAMPLE_RATE = 0.1  # 10 Hz
-SYNC_INTERVAL = 60  # Check for unsynced data every 60 seconds
+SYNC_INTERVAL = 10  # Check for unsynced data every 10 seconds (more frequent for live feel)
 
 # === LOGGING SETUP ===
 logging.basicConfig(
@@ -173,15 +174,17 @@ def initialize_components():
     else:
         logger.info("○ Accelerometer not available (placeholder)")
 
-    if MQTT_AVAILABLE:
-        try:
-            mqtt_client = MQTTClient()
-            components['mqtt_client'] = mqtt_client
-            logger.info("✓ MQTT client loaded")
-        except NotImplementedError:
-            logger.info("○ MQTT client placeholder (not yet implemented)")
-    else:
-        logger.info("○ MQTT client not available (placeholder)")
+    # Initialize Supabase Client
+    logger.info("[6/5] Initializing Supabase client...")
+    try:
+        supabase = SupabaseClient(SUPABASE_URL, SUPABASE_KEY)
+        components['supabase'] = supabase
+        if supabase.is_configured():
+            logger.info("✓ Supabase client configured")
+        else:
+            logger.warning("! Supabase client has placeholder credentials. Update SUPABASE_URL/KEY.")
+    except Exception as e:
+        logger.error(f"Failed to initialize Supabase client: {e}")
 
     # Print stats
     stats = data_mgr.get_stats()
@@ -199,16 +202,16 @@ def initialize_components():
 
 def sync_unsynced_data(components):
     """
-    Sync unsynced data to remote server.
+    Sync unsynced data to remote server (Supabase).
     Called periodically to handle offline functionality (spec #23).
 
     Args:
-        components: Dictionary with data_manager and optionally mqtt_client
+        components: Dictionary with data_manager and supabase client
     """
     data_mgr = components.get('data_manager')
-    mqtt_client = components.get('mqtt_client')
+    supabase = components.get('supabase')
 
-    if not data_mgr:
+    if not data_mgr or not supabase:
         return
 
     # Get unsynced readings
@@ -219,22 +222,28 @@ def sync_unsynced_data(components):
 
     logger.info(f"Found {len(unsynced)} unsynced readings")
 
-    if mqtt_client and MQTT_AVAILABLE:
+    # Sync loop
+    synced_count = 0
+    for reading in unsynced:
         try:
-            # TODO: MQTT team - implement actual sync logic
-            # for reading in unsynced:
-            #     json_data = data_mgr.to_json(reading)
-            #     mqtt_client.publish("sleepsense/data", json_data)
-
-            # Mark as synced (for now, assume all successful)
-            ids = [r['id'] for r in unsynced]
-            data_mgr.mark_synced(ids)
-            logger.info(f"Synced {len(ids)} readings to remote")
-
+            # Clean up the reading dictionary if necessary (DataManager usually returns row dicts)
+            # SupabaseClient handles key filtering, but let's ensure types are native Python
+            # (sqlite3.Row might behave oddly with some json serializers if not cast)
+            reading_dict = dict(reading) 
+            
+            if supabase.insert_reading(reading_dict):
+                data_mgr.mark_synced([reading['id']])
+                synced_count += 1
+            else:
+                # Stop on first error to prevent hammering logic or preserve order
+                logger.warning("Failed to sync reading, stopping batch.")
+                break
         except Exception as e:
-            logger.error(f"Failed to sync data: {e}")
-    else:
-        logger.debug(f"MQTT not available, {len(unsynced)} readings queued locally")
+            logger.error(f"Error syncing reading {reading.get('id')}: {e}")
+            break
+
+    if synced_count > 0:
+        logger.info(f"Synced {synced_count} readings to remote")
 
 
 def main_loop(components):
@@ -249,7 +258,7 @@ def main_loop(components):
     fsr = components['fsr']
     detector = components['detector']
     data_mgr = components['data_manager']
-    mqtt_client = components.get('mqtt_client')
+    # supabase client is accessed in sync_unsynced_data
 
     last_sync = time.time()
 
@@ -275,23 +284,14 @@ def main_loop(components):
                 variance=variance
             )
 
-            # 4. Get JSON for MQTT team (clean API)
-            sensor_data = fsr.get_sensor_data()
-            sensor_data['state'] = state.value
-            json_payload = data_mgr.to_json(sensor_data)
-
-            # TODO: MQTT team - publish here
-            # if mqtt_client and MQTT_AVAILABLE:
-            #     mqtt_client.publish("sleepsense/data", json_payload)
-
-            # 5. Display status
+            # 4. Display status
             time_still = detector.get_time_since_last_movement()
             info = f"({int(time_still)}s still)" if state == SleepState.ASLEEP else ""
 
             print(f"{voltage:>10.3f}V | {force_pct:>7.1f}% | {state.value:<18} | "
                   f"{variance:>6.3f} | {info}")
 
-            # 6. Periodic sync check (spec #23 - offline with sync)
+            # 5. Periodic sync check (spec #23 - offline with sync)
             now = time.time()
             if now - last_sync > SYNC_INTERVAL:
                 sync_unsynced_data(components)
