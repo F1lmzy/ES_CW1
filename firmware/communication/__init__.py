@@ -1,6 +1,6 @@
 # SleepSense Pro - Communication Module
 # MQTT client for remote data transmission
 
-from .mqtt_client import MQTTClient
+from supabase_client import SupabaseClient
 
-__all__ = ['MQTTClient']
+__all__ = ["SupabaseClient"]
