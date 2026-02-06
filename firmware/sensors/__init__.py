@@ -5,4 +5,4 @@
 from .ads1115 import ADS1115
 from .fsr408 import FSR408
 
-__all__ = ['ADS1115', 'FSR408']
+__all__ = ["ADS1115", "FSR408"]

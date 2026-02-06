@@ -9,11 +9,11 @@ FSR408 Characteristics:
 - Optimal range: 0.1N to 10N (10g to 1kg)
 """
 
-import time
 import logging
-from typing import Optional, Dict, List
-from collections import deque
 import statistics
+import time
+from collections import deque
+from typing import Dict, List, Optional
 
 from .ads1115 import ADS1115, ADS1115Error
 
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 class FSR408Error(Exception):
     """Custom exception for FSR408 errors"""
+
     pass
 
 
@@ -43,12 +44,13 @@ class FSR408:
     """
 
     # Default calibration values (will be overwritten after calibration)
-    DEFAULT_BASELINE = 0.5      # Voltage when no force applied (V)
-    DEFAULT_OCCUPIED = 2.0      # Voltage when occupied (V)
-    DEFAULT_MOVEMENT = 0.05     # Voltage variance threshold for movement
+    DEFAULT_BASELINE = 0.5  # Voltage when no force applied (V)
+    DEFAULT_OCCUPIED = 2.0  # Voltage when occupied (V)
+    DEFAULT_MOVEMENT = 0.05  # Voltage variance threshold for movement
 
-    def __init__(self, adc: ADS1115, channel: int = 0,
-                 window_size: int = 20, data_manager=None):
+    def __init__(
+        self, adc: ADS1115, channel: int = 0, window_size: int = 20, data_manager=None
+    ):
         """
         Initialize FSR408 sensor.
 
@@ -101,10 +103,10 @@ class FSR408:
 
         cal = self.data_manager.load_calibration()
         if cal:
-            self.baseline_voltage = cal['baseline_voltage']
-            self.occupied_threshold = cal['occupied_threshold']
-            self.movement_threshold = cal['movement_threshold']
-            self.calibrated_at = cal['calibrated_at']
+            self.baseline_voltage = cal["baseline_voltage"]
+            self.occupied_threshold = cal["occupied_threshold"]
+            self.movement_threshold = cal["movement_threshold"]
+            self.calibrated_at = cal["calibrated_at"]
             logger.info(f"Calibration loaded from {self.calibrated_at}")
             return True
 
@@ -140,12 +142,18 @@ class FSR408:
         # Measure baseline (no force)
         baseline_samples = self._collect_samples(50, 5.0)
         self.baseline_voltage = statistics.mean(baseline_samples)
-        baseline_std = statistics.stdev(baseline_samples) if len(baseline_samples) > 1 else 0
+        baseline_std = (
+            statistics.stdev(baseline_samples) if len(baseline_samples) > 1 else 0
+        )
 
-        logger.info(f"Baseline measured: {self.baseline_voltage:.3f}V (±{baseline_std:.3f}V)")
+        logger.info(
+            f"Baseline measured: {self.baseline_voltage:.3f}V (±{baseline_std:.3f}V)"
+        )
 
         if interactive:
-            input("\nStep 2: Lie on bed in normal sleeping position. Press ENTER when ready...")
+            input(
+                "\nStep 2: Lie on bed in normal sleeping position. Press ENTER when ready..."
+            )
         else:
             logger.info("Auto-calibration: measuring occupied state...")
             time.sleep(2)
@@ -153,9 +161,13 @@ class FSR408:
         # Measure occupied state
         occupied_samples = self._collect_samples(50, 5.0)
         self.occupied_threshold = statistics.mean(occupied_samples)
-        occupied_std = statistics.stdev(occupied_samples) if len(occupied_samples) > 1 else 0
+        occupied_std = (
+            statistics.stdev(occupied_samples) if len(occupied_samples) > 1 else 0
+        )
 
-        logger.info(f"Occupied measured: {self.occupied_threshold:.3f}V (±{occupied_std:.3f}V)")
+        logger.info(
+            f"Occupied measured: {self.occupied_threshold:.3f}V (±{occupied_std:.3f}V)"
+        )
 
         # Calculate movement threshold (10% of voltage range, minimum 0.05V)
         voltage_range = abs(self.occupied_threshold - self.baseline_voltage)
@@ -165,15 +177,17 @@ class FSR408:
 
         # Validation
         if voltage_range < 0.5:
-            logger.warning("WARNING: Small voltage range detected. Check sensor placement.")
+            logger.warning(
+                "WARNING: Small voltage range detected. Check sensor placement."
+            )
 
         # Save calibration
         self.calibrated_at = time.strftime("%Y-%m-%d %H:%M:%S")
 
         calibration_data = {
-            'baseline_voltage': self.baseline_voltage,
-            'occupied_threshold': self.occupied_threshold,
-            'movement_threshold': self.movement_threshold
+            "baseline_voltage": self.baseline_voltage,
+            "occupied_threshold": self.occupied_threshold,
+            "movement_threshold": self.movement_threshold,
         }
 
         if self.data_manager:
@@ -307,10 +321,10 @@ class FSR408:
             Dictionary with calibration data
         """
         return {
-            'baseline_voltage': self.baseline_voltage,
-            'occupied_threshold': self.occupied_threshold,
-            'movement_threshold': self.movement_threshold,
-            'calibrated_at': self.calibrated_at
+            "baseline_voltage": self.baseline_voltage,
+            "occupied_threshold": self.occupied_threshold,
+            "movement_threshold": self.movement_threshold,
+            "calibrated_at": self.calibrated_at,
         }
 
     def get_sensor_data(self) -> Dict:
@@ -326,12 +340,12 @@ class FSR408:
         variance = self.get_variance()
 
         return {
-            'voltage': voltage,
-            'force_percent': force_pct,
-            'variance': variance,
-            'is_occupied': self.is_occupied(),
-            'channel': self.channel,
-            'calibrated': self.calibrated_at is not None
+            "voltage": voltage,
+            "force_percent": force_pct,
+            "variance": variance,
+            "is_occupied": self.is_occupied(),
+            "channel": self.channel,
+            "calibrated": self.calibrated_at is not None,
         }
 
 
@@ -349,7 +363,9 @@ if __name__ == "__main__":
     # Simulate readings
     for i in range(10):
         data = fsr.get_sensor_data()
-        print(f"Sample {i+1}: {data['voltage']:.3f}V, "
-              f"{data['force_percent']:.1f}%, "
-              f"Occupied: {data['is_occupied']}")
+        print(
+            f"Sample {i + 1}: {data['voltage']:.3f}V, "
+            f"{data['force_percent']:.1f}%, "
+            f"Occupied: {data['is_occupied']}"
+        )
         time.sleep(0.5)

@@ -1,859 +1,1079 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SleepSense - Sleep Diary</title>
-    <!-- Removed Paho MQTT script -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary-blue: #4a90e2;
-            --header-blue: #5c9ce6;
-            --chart-bg: #345d9d;
-            --dozing-color: #f1c40f; /* Yellow */
-            --snoozing-color: #2ecc71; /* Green/Teal */
-            --slumbering-color: #3498db; /* Blue */
-            --bg-color: #ffffff;
-            --text-color: #2c3e50;
-            
-            /* Summary View Colors */
-            --summary-bg: #6ab0ff;
-            --summary-card-bg: #ffffff;
-            --circle-track: #e0e0e0;
-            --circle-progress: #3b82f6;
-        }
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>SleepSense - Sleep Diary</title>
+        <!-- Removed Paho MQTT script -->
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --primary-blue: #4a90e2;
+                --header-blue: #5c9ce6;
+                --chart-bg: #345d9d;
+                --dozing-color: #f1c40f; /* Yellow */
+                --snoozing-color: #2ecc71; /* Green/Teal */
+                --slumbering-color: #3498db; /* Blue */
+                --bg-color: #ffffff;
+                --text-color: #2c3e50;
 
-        body {
-            font-family: 'Nunito', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-        }
+                /* Summary View Colors */
+                --summary-bg: #6ab0ff;
+                --summary-card-bg: #ffffff;
+                --circle-track: #e0e0e0;
+                --circle-progress: #3b82f6;
+            }
 
-        .app-container {
-            width: 100%;
-            max-width: 480px; /* Mobile app width */
-            background-color: #fff;
-            min-height: 100vh;
-            position: relative;
-            padding-bottom: 80px;
-        }
+            body {
+                font-family: "Nunito", sans-serif;
+                background-color: var(--bg-color);
+                color: var(--text-color);
+                margin: 0;
+                padding: 0;
+                display: flex;
+                justify-content: center;
+            }
 
-        /* --- Views Management --- */
-        .view-section {
-            display: none;
-            width: 100%;
-            height: 100%;
-        }
-        
-        .view-section.active {
-            display: block;
-        }
+            .app-container {
+                width: 100%;
+                max-width: 480px; /* Mobile app width */
+                background-color: #fff;
+                min-height: 100vh;
+                position: relative;
+                padding-bottom: 80px;
+            }
 
-        /* --- Details View Styles --- */
-        /* Header */
-        .header {
-            background-color: var(--header-blue);
-            color: white;
-            padding: 15px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom-left-radius: 20px;
-            border-bottom-right-radius: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
+            /* --- Views Management --- */
+            .view-section {
+                display: none;
+                width: 100%;
+                height: 100%;
+            }
 
-        .date-display {
-            font-size: 18px;
-            font-weight: 800;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+            .view-section.active {
+                display: block;
+            }
 
-        .zzz-icon {
-            font-weight: 900;
-            font-style: italic;
-        }
+            /* --- Details View Styles --- */
+            /* Header */
+            .header {
+                background-color: var(--header-blue);
+                color: white;
+                padding: 15px 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom-left-radius: 20px;
+                border-bottom-right-radius: 20px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
 
-        .diary-btn {
-            background: rgba(255,255,255,0.2);
-            border: none;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 8px;
-            font-size: 14px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
+            .date-display {
+                font-size: 18px;
+                font-weight: 800;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
 
-        /* Section Title */
-        .section-title {
-            color: var(--header-blue);
-            font-weight: 800;
-            font-size: 18px;
-            margin: 20px 20px 10px;
-            display: flex;
-            align-items: center;
-        }
-        
-        .section-title::before {
-            content: '';
-            display: inline-block;
-            width: 5px;
-            height: 20px;
-            background-color: var(--header-blue);
-            margin-right: 10px;
-            border-radius: 3px;
-        }
+            .zzz-icon {
+                font-weight: 900;
+                font-style: italic;
+            }
 
-        /* Percentage Bar */
-        .percentage-container {
-            margin: 0 20px 20px;
-        }
+            .diary-btn {
+                background: rgba(255, 255, 255, 0.2);
+                border: none;
+                color: white;
+                padding: 5px 10px;
+                border-radius: 8px;
+                font-size: 14px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
 
-        .percentage-labels {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-weight: 700;
-            font-size: 14px;
-        }
+            /* Section Title */
+            .section-title {
+                color: var(--header-blue);
+                font-weight: 800;
+                font-size: 18px;
+                margin: 20px 20px 10px;
+                display: flex;
+                align-items: center;
+            }
 
-        .p-label span { margin-left: 5px; color: #333; }
-        .c-dozing { color: var(--dozing-color); }
-        .c-snoozing { color: var(--snoozing-color); }
-        .c-slumbering { color: var(--slumbering-color); }
+            .section-title::before {
+                content: "";
+                display: inline-block;
+                width: 5px;
+                height: 20px;
+                background-color: var(--header-blue);
+                margin-right: 10px;
+                border-radius: 3px;
+            }
 
-        .progress-bar {
-            height: 10px;
-            width: 100%;
-            background-color: #eee;
-            border-radius: 5px;
-            display: flex;
-            overflow: hidden;
-        }
+            /* Percentage Bar */
+            .percentage-container {
+                margin: 0 20px 20px;
+            }
 
-        .bar-segment { height: 100%; transition: width 0.5s ease; }
-        .bg-dozing { background-color: var(--dozing-color); }
-        .bg-snoozing { background-color: var(--snoozing-color); }
-        .bg-slumbering { background-color: var(--slumbering-color); }
+            .percentage-labels {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 8px;
+                font-weight: 700;
+                font-size: 14px;
+            }
 
-        /* Chart Card */
-        .chart-card {
-            background: linear-gradient(180deg, #4b6cb7 0%, #182848 100%);
-            margin: 0 20px 20px;
-            padding: 15px;
-            border-radius: 15px;
-            color: white;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-        }
+            .p-label span {
+                margin-left: 5px;
+                color: #333;
+            }
+            .c-dozing {
+                color: var(--dozing-color);
+            }
+            .c-snoozing {
+                color: var(--snoozing-color);
+            }
+            .c-slumbering {
+                color: var(--slumbering-color);
+            }
 
-        /* Stats List */
-        .stats-list {
-            padding: 0 20px;
-        }
+            .progress-bar {
+                height: 10px;
+                width: 100%;
+                background-color: #eee;
+                border-radius: 5px;
+                display: flex;
+                overflow: hidden;
+            }
 
-        .stat-item {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-        }
+            .bar-segment {
+                height: 100%;
+                transition: width 0.5s ease;
+            }
+            .bg-dozing {
+                background-color: var(--dozing-color);
+            }
+            .bg-snoozing {
+                background-color: var(--snoozing-color);
+            }
+            .bg-slumbering {
+                background-color: var(--slumbering-color);
+            }
 
-        .stat-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-right: 15px;
-            font-weight: bold;
-            color: white;
-        }
+            /* Chart Card */
+            .chart-card {
+                background: linear-gradient(180deg, #4b6cb7 0%, #182848 100%);
+                margin: 0 20px 20px;
+                padding: 15px;
+                border-radius: 15px;
+                color: white;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            }
 
-        .stat-content {
-            flex-grow: 1;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: 700;
-        }
+            /* Stats List */
+            .stats-list {
+                padding: 0 20px;
+            }
 
-        .stat-label { color: #555; font-size: 15px; }
-        .stat-value { font-size: 16px; color: #333; }
+            .stat-item {
+                display: flex;
+                align-items: center;
+                margin-bottom: 20px;
+            }
 
-        .icon-blue { background-color: #5dade2; }
-        .icon-yellow { background-color: var(--dozing-color); }
-        .icon-teal { background-color: var(--snoozing-color); }
-        .icon-dark-blue { background-color: var(--slumbering-color); }
+            .stat-icon {
+                width: 40px;
+                height: 40px;
+                border-radius: 8px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                margin-right: 15px;
+                font-weight: bold;
+                color: white;
+            }
 
-        /* Connection Panel (Hidden/Config) */
-        .config-toggle {
-            text-align: center;
-            font-size: 12px;
-            color: #aaa;
-            margin-top: 20px;
-            cursor: pointer;
-        }
-        .config-panel {
-            display: none;
-            padding: 20px;
-            background: #f8f9fa;
-            margin: 10px;
-            border-radius: 8px;
-        }
-        .config-panel.active { display: block; }
-        
-        .bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0; right: 0;
-            background: #5c9ce6;
-            padding: 15px;
-            display: flex;
-            justify-content: center;
-            z-index: 100;
-        }
-        
-        .back-btn {
-            background: white;
-            color: #5c9ce6;
-            border: none;
-            padding: 10px 30px;
-            border-radius: 20px;
-            font-weight: bold;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            cursor: pointer;
-        }
+            .stat-content {
+                flex-grow: 1;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-weight: 700;
+            }
 
-        /* --- Summary View Styles --- */
-        #view-summary {
-            background-color: var(--summary-bg);
-            /* Pattern overlay simulation */
-            background-image: radial-gradient(rgba(255,255,255,0.1) 15%, transparent 16%), radial-gradient(rgba(255,255,255,0.1) 15%, transparent 16%);
-            background-size: 20px 20px;
-            background-position: 0 0, 10px 10px;
-            min-height: 100vh;
-            color: white;
-            /* Display Flex is now handled by .active class to ensure toggling works */
-        }
+            .stat-label {
+                color: #555;
+                font-size: 15px;
+            }
+            .stat-value {
+                font-size: 16px;
+                color: #333;
+            }
 
-        #view-summary.active {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
+            .icon-blue {
+                background-color: #5dade2;
+            }
+            .icon-yellow {
+                background-color: var(--dozing-color);
+            }
+            .icon-teal {
+                background-color: var(--snoozing-color);
+            }
+            .icon-dark-blue {
+                background-color: var(--slumbering-color);
+            }
 
-        #view-details.active {
-            display: block;
-        }
-        
-        .summary-header {
-            text-align: center;
-            margin-top: 40px;
-            margin-bottom: 30px;
-        }
-        
-        .summary-date {
-            font-size: 14px;
-            font-weight: 700;
-            opacity: 0.9;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid rgba(255,255,255,0.4);
-            padding-bottom: 5px;
-            display: inline-block;
-        }
+            /* Connection Panel (Hidden/Config) */
+            .config-toggle {
+                text-align: center;
+                font-size: 12px;
+                color: #aaa;
+                margin-top: 20px;
+                cursor: pointer;
+            }
+            .config-panel {
+                display: none;
+                padding: 20px;
+                background: #f8f9fa;
+                margin: 10px;
+                border-radius: 8px;
+            }
+            .config-panel.active {
+                display: block;
+            }
 
-        .summary-card {
-            background: white;
-            width: 80%;
-            border-radius: 20px;
-            padding: 30px 20px;
-            text-align: center;
-            color: #333;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            position: relative;
-        }
-        
-        /* Decorative card top element */
-        .summary-card::before {
-            content: '';
-            position: absolute;
-            top: -8px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 40%;
-            height: 16px;
-            background-color: #3b82f6; /* Darker blue tab */
-            border-radius: 4px;
-        }
+            .bottom-nav {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: #5c9ce6;
+                padding: 15px;
+                display: flex;
+                justify-content: center;
+                z-index: 100;
+            }
 
-        .summary-title {
-            color: #3b82f6;
-            font-weight: 800;
-            margin-bottom: 20px;
-            font-size: 18px;
-        }
+            .back-btn {
+                background: white;
+                color: #5c9ce6;
+                border: none;
+                padding: 10px 30px;
+                border-radius: 20px;
+                font-weight: bold;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                cursor: pointer;
+            }
 
-        /* Circular Progress */
-        .circle-wrap {
-            position: relative;
-            width: 120px;
-            height: 120px;
-            margin: 0 auto 20px;
-            background: #f0f0f0;
-            border-radius: 50%;
-        }
-        
-        .circle-inner {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            z-index: 10;
-        }
-        
-        .score-val {
-            font-size: 32px;
-            font-weight: 800;
-            color: #3b82f6;
-            line-height: 1;
-        }
+            /* --- Summary View Styles --- */
+            #view-summary {
+                background-color: var(--summary-bg);
+                /* Pattern overlay simulation */
+                background-image:
+                    radial-gradient(
+                        rgba(255, 255, 255, 0.1) 15%,
+                        transparent 16%
+                    ),
+                    radial-gradient(
+                        rgba(255, 255, 255, 0.1) 15%,
+                        transparent 16%
+                    );
+                background-size: 20px 20px;
+                background-position:
+                    0 0,
+                    10px 10px;
+                min-height: 100vh;
+                color: white;
+                /* Display Flex is now handled by .active class to ensure toggling works */
+            }
 
-        /* Quick and dirty SVG circle for progress */
-        .progress-ring__circle {
-            transition: stroke-dashoffset 0.35s;
-            transform: rotate(-90deg);
-            transform-origin: 50% 50%;
-        }
+            #view-summary.active {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
 
-        .total-time-val {
-            font-size: 32px;
-            font-weight: 800;
-            color: #333;
-            margin-bottom: 5px;
-        }
-        
-        .time-range {
-            font-size: 14px;
-            color: #777;
-            font-weight: 600;
-            margin-bottom: 30px;
-        }
-        
-        /* --- Shared Navigation Footer Styles --- */
-        .nav-footer {
-            position: fixed;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 100%;
-            max-width: 480px;
-            padding: 30px 20px;
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            z-index: 1000;
-            pointer-events: none; /* Let clicks pass through empty space */
-            box-sizing: border-box;
-        }
+            #view-details.active {
+                display: block;
+            }
 
-        .nav-btn {
-            pointer-events: auto;
-            padding: 12px 30px;
-            border-radius: 25px;
-            font-weight: bold;
-            font-size: 16px;
-            cursor: pointer;
-            min-width: 100px;
-            border: none;
-            transition: transform 0.1s;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
-        
-        .nav-btn:active { transform: scale(0.95); }
-        .nav-btn:hover { opacity: 0.9; }
+            .summary-header {
+                text-align: center;
+                margin-top: 40px;
+                margin-bottom: 30px;
+            }
 
-        /* Context: Summary View (Blue BG) */
-        #view-summary .nav-btn.secondary {
-            background: rgba(255,255,255,0.2);
-            color: white;
-            box-shadow: none;
-        }
-        
-        #view-summary .nav-btn.primary {
-            background: #3b82f6;
-            color: white;
-        }
+            .summary-date {
+                font-size: 14px;
+                font-weight: 700;
+                opacity: 0.9;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+                padding-bottom: 5px;
+                display: inline-block;
+            }
 
-        /* Context: Details View (White BG) */
-        #view-details .nav-btn.secondary {
-            background: #f0f2f5;
-            color: #7f8c8d;
-            box-shadow: none;
-        }
-        
-        #view-details .nav-btn.primary {
-            background: #5c9ce6;
-            color: white;
-        }
+            .summary-card {
+                background: white;
+                width: 80%;
+                border-radius: 20px;
+                padding: 30px 20px;
+                text-align: center;
+                color: #333;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+                position: relative;
+            }
 
-    </style>
-</head>
-<body>
+            /* Decorative card top element */
+            .summary-card::before {
+                content: "";
+                position: absolute;
+                top: -8px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 40%;
+                height: 16px;
+                background-color: #3b82f6; /* Darker blue tab */
+                border-radius: 4px;
+            }
 
-<div class="app-container">
-    
-    <!-- VIEW 1: SUMMARY (New) -->
-    <div id="view-summary" class="view-section active">
-        <div class="summary-header">
-            <div id="summary-date" class="summary-date">Wednesday, Jul 5, 2023 (Day 1)</div>
-        </div>
+            .summary-title {
+                color: #3b82f6;
+                font-weight: 800;
+                margin-bottom: 20px;
+                font-size: 18px;
+            }
 
-        <div class="summary-card">
-            <div class="summary-title">Today's Sleep Time</div>
-            
-            <div class="circle-wrap">
-                <svg class="progress-ring" width="120" height="120">
-                    <circle class="progress-ring__circle" stroke="#e0e0e0" stroke-width="8" fill="transparent" r="52" cx="60" cy="60"/>
-                    <circle id="score-ring" class="progress-ring__circle" stroke="#3b82f6" stroke-width="8" fill="transparent" r="52" cx="60" cy="60" stroke-dasharray="326.72" stroke-dashoffset="326.72"/>
-                </svg>
-                <div class="circle-inner">
-                    <div id="score-value" class="score-val">--</div>
+            /* Circular Progress */
+            .circle-wrap {
+                position: relative;
+                width: 120px;
+                height: 120px;
+                margin: 0 auto 20px;
+                background: #f0f0f0;
+                border-radius: 50%;
+            }
+
+            .circle-inner {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                text-align: center;
+                z-index: 10;
+            }
+
+            .score-val {
+                font-size: 32px;
+                font-weight: 800;
+                color: #3b82f6;
+                line-height: 1;
+            }
+
+            /* Quick and dirty SVG circle for progress */
+            .progress-ring__circle {
+                transition: stroke-dashoffset 0.35s;
+                transform: rotate(-90deg);
+                transform-origin: 50% 50%;
+            }
+
+            .total-time-val {
+                font-size: 32px;
+                font-weight: 800;
+                color: #333;
+                margin-bottom: 5px;
+            }
+
+            .time-range {
+                font-size: 14px;
+                color: #777;
+                font-weight: 600;
+                margin-bottom: 30px;
+            }
+
+            /* --- Shared Navigation Footer Styles --- */
+            .nav-footer {
+                position: fixed;
+                bottom: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 100%;
+                max-width: 480px;
+                padding: 30px 20px;
+                display: flex;
+                justify-content: center;
+                gap: 20px;
+                z-index: 1000;
+                pointer-events: none; /* Let clicks pass through empty space */
+                box-sizing: border-box;
+            }
+
+            .nav-btn {
+                pointer-events: auto;
+                padding: 12px 30px;
+                border-radius: 25px;
+                font-weight: bold;
+                font-size: 16px;
+                cursor: pointer;
+                min-width: 100px;
+                border: none;
+                transition: transform 0.1s;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            }
+
+            .nav-btn:active {
+                transform: scale(0.95);
+            }
+            .nav-btn:hover {
+                opacity: 0.9;
+            }
+
+            /* Context: Summary View (Blue BG) */
+            #view-summary .nav-btn.secondary {
+                background: rgba(255, 255, 255, 0.2);
+                color: white;
+                box-shadow: none;
+            }
+
+            #view-summary .nav-btn.primary {
+                background: #3b82f6;
+                color: white;
+            }
+
+            /* Context: Details View (White BG) */
+            #view-details .nav-btn.secondary {
+                background: #f0f2f5;
+                color: #7f8c8d;
+                box-shadow: none;
+            }
+
+            #view-details .nav-btn.primary {
+                background: #5c9ce6;
+                color: white;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="app-container">
+            <!-- VIEW 1: SUMMARY (New) -->
+            <div id="view-summary" class="view-section active">
+                <div class="summary-header">
+                    <div id="summary-date" class="summary-date">
+                        Wednesday, Jul 5, 2023 (Day 1)
+                    </div>
+                </div>
+
+                <div class="summary-card">
+                    <div class="summary-title">Today's Sleep Time</div>
+
+                    <div class="circle-wrap">
+                        <svg class="progress-ring" width="120" height="120">
+                            <circle
+                                class="progress-ring__circle"
+                                stroke="#e0e0e0"
+                                stroke-width="8"
+                                fill="transparent"
+                                r="52"
+                                cx="60"
+                                cy="60"
+                            />
+                            <circle
+                                id="score-ring"
+                                class="progress-ring__circle"
+                                stroke="#3b82f6"
+                                stroke-width="8"
+                                fill="transparent"
+                                r="52"
+                                cx="60"
+                                cy="60"
+                                stroke-dasharray="326.72"
+                                stroke-dashoffset="326.72"
+                            />
+                        </svg>
+                        <div class="circle-inner">
+                            <div id="score-value" class="score-val">--</div>
+                        </div>
+                    </div>
+
+                    <div id="total-sleep-time" class="total-time-val">
+                        0 hr 0 min
+                    </div>
+                    <div id="sleep-range" class="time-range">-- : --</div>
+
+                    <div
+                        style="
+                            height: 20px;
+                            background-color: #3b82f6;
+                            margin: 0 -20px -30px -20px;
+                            border-bottom-left-radius: 20px;
+                            border-bottom-right-radius: 20px;
+                        "
+                    ></div>
+                </div>
+
+                <div class="nav-footer">
+                    <button
+                        class="nav-btn secondary"
+                        onclick="
+                            alert('Back functionality not implemented in demo')
+                        "
+                    >
+                        Back
+                    </button>
+                    <button
+                        class="nav-btn primary"
+                        onclick="switchView('details')"
+                    >
+                        Next
+                    </button>
                 </div>
             </div>
 
-            <div id="total-sleep-time" class="total-time-val">0 hr 0 min</div>
-            <div id="sleep-range" class="time-range">-- : --</div>
-            
-            <div style="height: 20px; background-color: #3b82f6; margin: 0 -20px -30px -20px; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px;"></div>
-        </div>
+            <!-- VIEW 2: DETAILS (Original) -->
+            <div id="view-details" class="view-section">
+                <!-- Header -->
+                <div class="header">
+                    <div class="date-display">
+                        <span class="zzz-icon">Zzz</span>
+                        <span id="current-date">Monday, Feb 5, 2024</span>
+                    </div>
+                    <button class="diary-btn">📅 Diary</button>
+                </div>
 
-        <div class="nav-footer">
-            <button class="nav-btn secondary" onclick="alert('Back functionality not implemented in demo')">Back</button>
-            <button class="nav-btn primary" onclick="switchView('details')">Next</button>
-        </div>
-    </div>
+                <!-- Details Section -->
+                <div class="section-title">Details</div>
 
+                <!-- Percentages -->
+                <div class="percentage-container">
+                    <div class="percentage-labels">
+                        <div class="p-label c-dozing">
+                            Dozing: <span id="pct-dozing">0%</span>
+                        </div>
+                        <div class="p-label c-snoozing">
+                            Snoozing: <span id="pct-snoozing">0%</span>
+                        </div>
+                        <div class="p-label c-slumbering">
+                            Slumbering: <span id="pct-slumbering">0%</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar">
+                        <div
+                            id="bar-dozing"
+                            class="bar-segment bg-dozing"
+                            style="width: 0%"
+                        ></div>
+                        <div
+                            id="bar-snoozing"
+                            class="bar-segment bg-snoozing"
+                            style="width: 0%"
+                        ></div>
+                        <div
+                            id="bar-slumbering"
+                            class="bar-segment bg-slumbering"
+                            style="width: 0%"
+                        ></div>
+                    </div>
+                </div>
 
-    <!-- VIEW 2: DETAILS (Original) -->
-    <div id="view-details" class="view-section">
-        <!-- Header -->
-        <div class="header">
-            <div class="date-display">
-                <span class="zzz-icon">Zzz</span>
-                <span id="current-date">Monday, Feb 5, 2024</span>
-            </div>
-            <button class="diary-btn">📅 Diary</button>
-        </div>
+                <!-- Graph -->
+                <div class="chart-card">
+                    <canvas id="sleepChart" height="200"></canvas>
+                </div>
 
-        <!-- Details Section -->
-        <div class="section-title">Details</div>
+                <!-- Toggle Buttons (Mock UI) -->
+                <div
+                    style="
+                        padding: 0 20px;
+                        display: flex;
+                        gap: 10px;
+                        margin-bottom: 20px;
+                    "
+                >
+                    <button
+                        style="
+                            flex: 1;
+                            padding: 10px;
+                            background: #5c9ce6;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            font-weight: bold;
+                        "
+                    >
+                        Sleep
+                    </button>
+                    <button
+                        style="
+                            flex: 1;
+                            padding: 10px;
+                            background: #f0f2f5;
+                            color: #666;
+                            border: none;
+                            border-radius: 8px;
+                            font-weight: bold;
+                        "
+                    >
+                        Sounds
+                    </button>
+                </div>
 
-        <!-- Percentages -->
-        <div class="percentage-container">
-            <div class="percentage-labels">
-                <div class="p-label c-dozing">Dozing: <span id="pct-dozing">0%</span></div>
-                <div class="p-label c-snoozing">Snoozing: <span id="pct-snoozing">0%</span></div>
-                <div class="p-label c-slumbering">Slumbering: <span id="pct-slumbering">0%</span></div>
-            </div>
-            <div class="progress-bar">
-                <div id="bar-dozing" class="bar-segment bg-dozing" style="width: 0%"></div>
-                <div id="bar-snoozing" class="bar-segment bg-snoozing" style="width: 0%"></div>
-                <div id="bar-slumbering" class="bar-segment bg-slumbering" style="width: 0%"></div>
-            </div>
-        </div>
+                <!-- Stats List -->
+                <div class="stats-list">
+                    <div class="stat-item">
+                        <div class="stat-icon icon-blue">🕒</div>
+                        <div class="stat-content">
+                            <span class="stat-label">Time to fall asleep</span>
+                            <span class="stat-value" id="time-to-sleep"
+                                >-- mins</span
+                            >
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-icon icon-yellow">Zzz</div>
+                        <div class="stat-content">
+                            <span class="stat-label">Dozing time</span>
+                            <span class="stat-value" id="time-dozing"
+                                >0 hrs 0 mins</span
+                            >
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-icon icon-teal">Zzz</div>
+                        <div class="stat-content">
+                            <span class="stat-label">Snoozing time</span>
+                            <span class="stat-value" id="time-snoozing"
+                                >0 hrs 0 mins</span
+                            >
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-icon icon-dark-blue">Zzz</div>
+                        <div class="stat-content">
+                            <span class="stat-label">Slumbering time</span>
+                            <span class="stat-value" id="time-slumbering"
+                                >0 hrs 0 mins</span
+                            >
+                        </div>
+                    </div>
+                </div>
 
-        <!-- Graph -->
-        <div class="chart-card">
-            <canvas id="sleepChart" height="200"></canvas>
-        </div>
+                <!-- Connection Config (Supabase) -->
+                <div
+                    class="config-toggle"
+                    onclick="
+                        document
+                            .getElementById('config')
+                            .classList.toggle('active')
+                    "
+                >
+                    ⚙️ Database Settings
+                    <span id="conn-status" style="color: red">●</span>
+                </div>
+                <div id="config" class="config-panel">
+                    <p style="font-size: 12px; margin-bottom: 10px">
+                        Enter your Supabase URL and Anon Key
+                    </p>
+                    <input
+                        type="text"
+                        id="sb-url"
+                        style="width: 100%; margin-bottom: 5px"
+                        placeholder="https://xyz.supabase.co"
+                    />
+                    <input
+                        type="text"
+                        id="sb-key"
+                        style="width: 100%; margin-bottom: 5px"
+                        placeholder="Anon Key"
+                    />
+                    <button
+                        onclick="startPolling()"
+                        style="width: 100%; padding: 5px"
+                    >
+                        Connect & Poll
+                    </button>
+                </div>
 
-        <!-- Toggle Buttons (Mock UI) -->
-        <div style="padding: 0 20px; display: flex; gap: 10px; margin-bottom: 20px;">
-            <button style="flex: 1; padding: 10px; background: #5c9ce6; color: white; border: none; border-radius: 8px; font-weight: bold;">Sleep</button>
-            <button style="flex: 1; padding: 10px; background: #f0f2f5; color: #666; border: none; border-radius: 8px; font-weight: bold;">Sounds</button>
-        </div>
-
-        <!-- Stats List -->
-        <div class="stats-list">
-            <div class="stat-item">
-                <div class="stat-icon icon-blue">🕒</div>
-                <div class="stat-content">
-                    <span class="stat-label">Time to fall asleep</span>
-                    <span class="stat-value" id="time-to-sleep">-- mins</span>
+                <div class="nav-footer">
+                    <button
+                        class="nav-btn secondary"
+                        onclick="switchView('summary')"
+                    >
+                        Back
+                    </button>
+                    <button
+                        class="nav-btn primary"
+                        onclick="alert('No more data')"
+                    >
+                        Next
+                    </button>
                 </div>
             </div>
-            <div class="stat-item">
-                <div class="stat-icon icon-yellow">Zzz</div>
-                <div class="stat-content">
-                    <span class="stat-label">Dozing time</span>
-                    <span class="stat-value" id="time-dozing">0 hrs 0 mins</span>
-                </div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-icon icon-teal">Zzz</div>
-                <div class="stat-content">
-                    <span class="stat-label">Snoozing time</span>
-                    <span class="stat-value" id="time-snoozing">0 hrs 0 mins</span>
-                </div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-icon icon-dark-blue">Zzz</div>
-                <div class="stat-content">
-                    <span class="stat-label">Slumbering time</span>
-                    <span class="stat-value" id="time-slumbering">0 hrs 0 mins</span>
-                </div>
-            </div>
         </div>
 
-        <!-- Connection Config (Supabase) -->
-        <div class="config-toggle" onclick="document.getElementById('config').classList.toggle('active')">
-            ⚙️ Database Settings <span id="conn-status" style="color:red">●</span>
-        </div>
-        <div id="config" class="config-panel">
-            <p style="font-size: 12px; margin-bottom: 10px;">Enter your Supabase URL and Anon Key</p>
-            <input type="text" id="sb-url" style="width: 100%; margin-bottom: 5px;" placeholder="https://xyz.supabase.co">
-            <input type="text" id="sb-key" style="width: 100%; margin-bottom: 5px;" placeholder="Anon Key">
-            <button onclick="startPolling()" style="width: 100%; padding: 5px;">Connect & Poll</button>
-        </div>
+        <script>
+            // --- Configuration ---
+            let pollInterval = null;
+            let history = []; // Store raw data points
+            let chart;
+            let lastFetchedId = 0; // Track the last ID we received to avoid duplicates efficiently
 
-        <div class="nav-footer">
-            <button class="nav-btn secondary" onclick="switchView('summary')">Back</button>
-            <button class="nav-btn primary" onclick="alert('No more data')">Next</button>
-        </div>
-    </div>
+            // Mapping constants
+            const STATE_MAP = {
+                "Empty Bed": 0,
+                "Present (Awake)": 3,
+                "Tossing/Turning": 3,
+                Asleep: 2,
+            };
 
-</div>
+            // --- View Management ---
+            function switchView(viewName) {
+                document
+                    .querySelectorAll(".view-section")
+                    .forEach((el) => el.classList.remove("active"));
+                document
+                    .getElementById("view-" + viewName)
+                    .classList.add("active");
 
-<script>
-    // --- Configuration ---
-    let pollInterval = null;
-    let history = []; // Store raw data points
-    let chart;
-    let lastFetchedId = 0; // Track the last ID we received to avoid duplicates efficiently
-    
-    // Mapping constants
-    const STATE_MAP = {
-        'Empty Bed': 0, 
-        'Present (Awake)': 3, 
-        'Tossing/Turning': 3,
-        'Asleep': 2
-    };
+                // Refresh charts if entering details view
+                if (viewName === "details" && chart) {
+                    chart.resize();
+                }
+            }
 
-    // --- View Management ---
-    function switchView(viewName) {
-        document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
-        document.getElementById('view-' + viewName).classList.add('active');
-        
-        // Refresh charts if entering details view
-        if(viewName === 'details' && chart) {
-            chart.resize(); 
-        }
-    }
+            // --- Initialization ---
+            document.addEventListener("DOMContentLoaded", () => {
+                // Set date
+                const now = new Date();
+                const options = {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                };
+                const dateStr = now.toLocaleDateString("en-US", options);
+                document.getElementById("current-date").innerText = dateStr;
+                document.getElementById("summary-date").innerText = dateStr;
 
-    // --- Initialization ---
-    document.addEventListener('DOMContentLoaded', () => {
-        // Set date
-        const now = new Date();
-        const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
-        const dateStr = now.toLocaleDateString('en-US', options);
-        document.getElementById('current-date').innerText = dateStr;
-        document.getElementById('summary-date').innerText = dateStr;
+                initChart();
 
-        initChart();
-        
-        // Check for saved credentials
-        const savedUrl = localStorage.getItem('sb-url');
-        const savedKey = localStorage.getItem('sb-key');
-        if (savedUrl && savedKey) {
-            document.getElementById('sb-url').value = savedUrl;
-            document.getElementById('sb-key').value = savedKey;
-            startPolling();
-        }
-    });
-
-    // --- Supabase Polling Logic ---
-    function startPolling() {
-        const url = document.getElementById('sb-url').value;
-        const key = document.getElementById('sb-key').value;
-
-        if (!url || !key) {
-            alert("Please enter Supabase URL and Key");
-            return;
-        }
-
-        // Save for convenience
-        localStorage.setItem('sb-url', url);
-        localStorage.setItem('sb-key', key);
-
-        if (pollInterval) clearInterval(pollInterval);
-        
-        document.getElementById('conn-status').style.color = "orange"; // Connecting/Polling state
-        
-        // Initial Fetch
-        fetchData(url, key);
-
-        // Poll every 3 seconds
-        pollInterval = setInterval(() => {
-            fetchData(url, key);
-        }, 3000);
-    }
-
-    async function fetchData(url, key) {
-        try {
-            // Fetch recent readings, order by id ascending so we can process history correctly
-            // Using ID filter to only get new stuff would be efficient, but for this demo
-            // we'll fetch the last 100 to ensure we have context, then de-dupe.
-            
-            const endpoint = `${url}/rest/v1/readings?select=*&order=id.desc&limit=100`;
-            
-            const response = await fetch(endpoint, {
-                headers: {
-                    'apikey': key,
-                    'Authorization': `Bearer ${key}`
+                // Check for saved credentials
+                const savedUrl = localStorage.getItem("sb-url");
+                const savedKey = localStorage.getItem("sb-key");
+                if (savedUrl && savedKey) {
+                    document.getElementById("sb-url").value = savedUrl;
+                    document.getElementById("sb-key").value = savedKey;
+                    startPolling();
                 }
             });
 
-            if (response.ok) {
-                const data = await response.json();
-                document.getElementById('conn-status').style.color = "green";
-                
-                // Data comes in descending order (newest first). Reverse to process chronologically.
-                const chronologicalData = data.reverse();
-                
-                // Process only new items or rebuild history (simplest here is rebuild logic for 100 items)
-                // Ideally, we'd filter by ID > lastFetchedId.
-                // Let's implement that filter locally for the history array.
-                
-                chronologicalData.forEach(item => {
-                    if (item.id > lastFetchedId) {
-                        processDataPoint(item);
-                        lastFetchedId = item.id;
-                    }
-                });
-                
-            } else {
-                console.error("Fetch failed", response.status);
-                document.getElementById('conn-status').style.color = "red";
+            // --- Supabase Polling Logic ---
+            function startPolling() {
+                const url = document.getElementById("sb-url").value;
+                const key = document.getElementById("sb-key").value;
+
+                if (!url || !key) {
+                    alert("Please enter Supabase URL and Key");
+                    return;
+                }
+
+                // Save for convenience
+                localStorage.setItem("sb-url", url);
+                localStorage.setItem("sb-key", key);
+
+                if (pollInterval) clearInterval(pollInterval);
+
+                document.getElementById("conn-status").style.color = "orange"; // Connecting/Polling state
+
+                // Initial Fetch
+                fetchData(url, key);
+
+                // Poll every 3 seconds
+                pollInterval = setInterval(() => {
+                    fetchData(url, key);
+                }, 3000);
             }
-        } catch (e) {
-            console.error("Polling error", e);
-            document.getElementById('conn-status').style.color = "red";
-        }
-    }
 
-    // --- Data Processing ---
-    function processDataPoint(data) {
-        // 1. Determine Sleep Stage (Dozing=3, Snoozing=2, Slumbering=1)
-        let stage = 3; // Default Awake
-        let stageName = 'dozing';
-        
-        const rawState = data.state; // "Asleep", "Present (Awake)", "Tossing/Turning"
-        
-        if (rawState === "Empty Bed") return; 
+            async function fetchData(url, key) {
+                try {
+                    // Fetch recent readings, order by id ascending so we can process history correctly
+                    // Using ID filter to only get new stuff would be efficient, but for this demo
+                    // we'll fetch the last 100 to ensure we have context, then de-dupe.
 
-        if (rawState === "Asleep") {
-            // Check variance for Slumbering (Deep Sleep)
-            if (data.variance < 0.008) { 
-                stage = 1; 
-                stageName = 'slumbering';
-            } else {
-                stage = 2; 
-                stageName = 'snoozing';
-            }
-        } else {
-            // Awake or Moving
-            stage = 3;
-            stageName = 'dozing';
-        }
+                    const endpoint = `${url}/rest/v1/readings?select=*&order=id.desc&limit=100`;
 
-        const point = {
-            // Supabase returns 'created_at' usually, or our manual 'timestamp'
-            x: data.created_at ? new Date(data.created_at).getTime() : new Date().getTime(),
-            y: stage,
-            stage: stageName
-        };
-
-        history.push(point);
-        
-        // Keep history manageable
-        if (history.length > 2000) history.shift();
-
-        updateStats();
-        updateSummary();
-        updateChart();
-    }
-
-    // --- Stats Calculation ---
-    function updateStats() {
-        if (history.length === 0) return;
-
-        let counts = { dozing: 0, snoozing: 0, slumbering: 0 };
-        let total = 0;
-
-        history.forEach(pt => {
-            counts[pt.stage]++;
-            total++;
-        });
-
-        // 1. Update Percentages
-        const pDoz = Math.round((counts.dozing / total) * 100);
-        const pSno = Math.round((counts.snoozing / total) * 100);
-        const pSlu = Math.round((counts.slumbering / total) * 100);
-
-        document.getElementById('pct-dozing').innerText = pDoz + "%";
-        document.getElementById('pct-snoozing').innerText = pSno + "%";
-        document.getElementById('pct-slumbering').innerText = pSlu + "%";
-
-        document.getElementById('bar-dozing').style.width = pDoz + "%";
-        document.getElementById('bar-snoozing').style.width = pSno + "%";
-        document.getElementById('bar-slumbering').style.width = pSlu + "%";
-
-        // 2. Update Times
-        const startTime = history[0].x;
-        const endTime = history[history.length-1].x;
-        const totalDurationMs = endTime - startTime;
-        
-        if (totalDurationMs > 0) {
-            const formatTime = (ms) => {
-                const mins = Math.floor(ms / 60000);
-                const hrs = Math.floor(mins / 60);
-                const remMins = mins % 60;
-                return hrs > 0 ? `${hrs} hrs ${remMins} mins` : `${remMins} mins`;
-            };
-
-            const msPerPoint = totalDurationMs / total;
-
-            document.getElementById('time-dozing').innerText = formatTime(counts.dozing * msPerPoint);
-            document.getElementById('time-snoozing').innerText = formatTime(counts.snoozing * msPerPoint);
-            document.getElementById('time-slumbering').innerText = formatTime(counts.slumbering * msPerPoint);
-            
-            // Store calculated values for summary view
-            window.lastCalculatedStats = {
-                totalSleepMs: (counts.snoozing + counts.slumbering) * msPerPoint,
-                startTime: startTime,
-                endTime: endTime
-            };
-        }
-
-        // 3. Time to Fall Asleep
-        const firstSleepIndex = history.findIndex(pt => pt.y < 3);
-        if (firstSleepIndex > 0) {
-            const timeToSleepMs = history[firstSleepIndex].x - history[0].x;
-            const mins = Math.floor(timeToSleepMs / 60000);
-            document.getElementById('time-to-sleep').innerText = mins + " mins";
-        } else if (firstSleepIndex === 0) {
-             document.getElementById('time-to-sleep').innerText = "0 mins";
-        } else {
-             document.getElementById('time-to-sleep').innerText = "-- mins";
-        }
-    }
-    
-    // --- Update Summary View ---
-    function updateSummary() {
-        if (!window.lastCalculatedStats) return;
-        
-        const stats = window.lastCalculatedStats;
-        
-        // 1. Total Sleep Time Text
-        const mins = Math.floor(stats.totalSleepMs / 60000);
-        const hrs = Math.floor(mins / 60);
-        const remMins = mins % 60;
-        document.getElementById('total-sleep-time').innerText = `${hrs} hr ${remMins} min`;
-        
-        // 2. Sleep Score (Mock calculation)
-        let score = Math.round((mins / 480) * 100); 
-        if (score > 100) score = 100;
-        if (mins < 10) score = 85; 
-        
-        document.getElementById('score-value').innerText = score;
-        
-        // Update SVG Ring
-        const circle = document.getElementById('score-ring');
-        const radius = circle.r.baseVal.value;
-        const circumference = radius * 2 * Math.PI;
-        const offset = circumference - (score / 100) * circumference;
-        circle.style.strokeDashoffset = offset;
-        
-        // 3. Time Range
-        const start = new Date(stats.startTime);
-        const end = new Date(stats.endTime);
-        
-        const fmt = (d) => d.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'});
-        document.getElementById('sleep-range').innerText = `${fmt(start)} - ${fmt(end)}`;
-    }
-
-    // --- Chart ---
-    function initChart() {
-        const ctx = document.getElementById('sleepChart').getContext('2d');
-        chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                datasets: [{
-                    label: 'Sleep Stage',
-                    data: [],
-                    borderColor: '#ffffff',
-                    borderWidth: 2,
-                    stepped: true, // Key for hypnogram look
-                    pointRadius: 0,
-                    fill: false
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: {
-                            unit: 'minute'
+                    const response = await fetch(endpoint, {
+                        headers: {
+                            apikey: key,
+                            Authorization: `Bearer ${key}`,
                         },
-                        grid: { display: false, color: 'rgba(255,255,255,0.1)' },
-                        ticks: { color: 'rgba(255,255,255,0.7)' }
-                    },
-                    y: {
-                        min: 0.5,
-                        max: 3.5,
-                        ticks: {
-                            callback: function(value) {
-                                if (value === 3) return 'Doz.';
-                                if (value === 2) return 'Snooz.';
-                                if (value === 1) return 'Slumb.';
-                                return '';
-                            },
-                            color: 'rgba(255,255,255,0.8)',
-                            font: { size: 12 }
-                        },
-                        grid: {
-                            color: 'rgba(255,255,255,0.1)'
-                        }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        document.getElementById("conn-status").style.color =
+                            "green";
+
+                        // Data comes in descending order (newest first). Reverse to process chronologically.
+                        const chronologicalData = data.reverse();
+
+                        // Process only new items or rebuild history (simplest here is rebuild logic for 100 items)
+                        // Ideally, we'd filter by ID > lastFetchedId.
+                        // Let's implement that filter locally for the history array.
+
+                        chronologicalData.forEach((item) => {
+                            if (item.id > lastFetchedId) {
+                                processDataPoint(item);
+                                lastFetchedId = item.id;
+                            }
+                        });
+                    } else {
+                        console.error("Fetch failed", response.status);
+                        document.getElementById("conn-status").style.color =
+                            "red";
                     }
-                },
-                plugins: {
-                    legend: { display: false }
+                } catch (e) {
+                    console.error("Polling error", e);
+                    document.getElementById("conn-status").style.color = "red";
                 }
             }
-        });
-    }
 
-    function updateChart() {
-        if (!chart) return;
-        chart.data.datasets[0].data = history;
-        chart.update('none'); // Update without full animation for performance
-    }
+            // --- Data Processing ---
+            function processDataPoint(data) {
+                // 1. Determine Sleep Stage (Dozing=3, Snoozing=2, Slumbering=1)
+                let stage = 3; // Default Awake
+                let stageName = "dozing";
 
-</script>
-</body>
+                const rawState = data.state; // "Asleep", "Present (Awake)", "Tossing/Turning"
+
+                if (rawState === "Empty Bed") return;
+
+                if (rawState === "Asleep") {
+                    // Check variance for Slumbering (Deep Sleep)
+                    if (data.variance < 0.008) {
+                        stage = 1;
+                        stageName = "slumbering";
+                    } else {
+                        stage = 2;
+                        stageName = "snoozing";
+                    }
+                } else {
+                    // Awake or Moving
+                    stage = 3;
+                    stageName = "dozing";
+                }
+
+                const point = {
+                    // Supabase returns 'created_at' usually, or our manual 'timestamp'
+                    x: data.created_at
+                        ? new Date(data.created_at).getTime()
+                        : new Date().getTime(),
+                    y: stage,
+                    stage: stageName,
+                };
+
+                history.push(point);
+
+                // Keep history manageable
+                if (history.length > 2000) history.shift();
+
+                updateStats();
+                updateSummary();
+                updateChart();
+            }
+
+            // --- Stats Calculation ---
+            function updateStats() {
+                if (history.length === 0) return;
+
+                let counts = { dozing: 0, snoozing: 0, slumbering: 0 };
+                let total = 0;
+
+                history.forEach((pt) => {
+                    counts[pt.stage]++;
+                    total++;
+                });
+
+                // 1. Update Percentages
+                const pDoz = Math.round((counts.dozing / total) * 100);
+                const pSno = Math.round((counts.snoozing / total) * 100);
+                const pSlu = Math.round((counts.slumbering / total) * 100);
+
+                document.getElementById("pct-dozing").innerText = pDoz + "%";
+                document.getElementById("pct-snoozing").innerText = pSno + "%";
+                document.getElementById("pct-slumbering").innerText =
+                    pSlu + "%";
+
+                document.getElementById("bar-dozing").style.width = pDoz + "%";
+                document.getElementById("bar-snoozing").style.width =
+                    pSno + "%";
+                document.getElementById("bar-slumbering").style.width =
+                    pSlu + "%";
+
+                // 2. Update Times
+                const startTime = history[0].x;
+                const endTime = history[history.length - 1].x;
+                const totalDurationMs = endTime - startTime;
+
+                if (totalDurationMs > 0) {
+                    const formatTime = (ms) => {
+                        const mins = Math.floor(ms / 60000);
+                        const hrs = Math.floor(mins / 60);
+                        const remMins = mins % 60;
+                        return hrs > 0
+                            ? `${hrs} hrs ${remMins} mins`
+                            : `${remMins} mins`;
+                    };
+
+                    const msPerPoint = totalDurationMs / total;
+
+                    document.getElementById("time-dozing").innerText =
+                        formatTime(counts.dozing * msPerPoint);
+                    document.getElementById("time-snoozing").innerText =
+                        formatTime(counts.snoozing * msPerPoint);
+                    document.getElementById("time-slumbering").innerText =
+                        formatTime(counts.slumbering * msPerPoint);
+
+                    // Store calculated values for summary view
+                    window.lastCalculatedStats = {
+                        totalSleepMs:
+                            (counts.snoozing + counts.slumbering) * msPerPoint,
+                        startTime: startTime,
+                        endTime: endTime,
+                    };
+                }
+
+                // 3. Time to Fall Asleep
+                const firstSleepIndex = history.findIndex((pt) => pt.y < 3);
+                if (firstSleepIndex > 0) {
+                    const timeToSleepMs =
+                        history[firstSleepIndex].x - history[0].x;
+                    const mins = Math.floor(timeToSleepMs / 60000);
+                    document.getElementById("time-to-sleep").innerText =
+                        mins + " mins";
+                } else if (firstSleepIndex === 0) {
+                    document.getElementById("time-to-sleep").innerText =
+                        "0 mins";
+                } else {
+                    document.getElementById("time-to-sleep").innerText =
+                        "-- mins";
+                }
+            }
+
+            // --- Update Summary View ---
+            function updateSummary() {
+                if (!window.lastCalculatedStats) return;
+
+                const stats = window.lastCalculatedStats;
+
+                // 1. Total Sleep Time Text
+                const mins = Math.floor(stats.totalSleepMs / 60000);
+                const hrs = Math.floor(mins / 60);
+                const remMins = mins % 60;
+                document.getElementById("total-sleep-time").innerText =
+                    `${hrs} hr ${remMins} min`;
+
+                // 2. Sleep Score (Mock calculation)
+                let score = Math.round((mins / 480) * 100);
+                if (score > 100) score = 100;
+                if (mins < 10) score = 85;
+
+                document.getElementById("score-value").innerText = score;
+
+                // Update SVG Ring
+                const circle = document.getElementById("score-ring");
+                const radius = circle.r.baseVal.value;
+                const circumference = radius * 2 * Math.PI;
+                const offset = circumference - (score / 100) * circumference;
+                circle.style.strokeDashoffset = offset;
+
+                // 3. Time Range
+                const start = new Date(stats.startTime);
+                const end = new Date(stats.endTime);
+
+                const fmt = (d) =>
+                    d.toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                    });
+                document.getElementById("sleep-range").innerText =
+                    `${fmt(start)} - ${fmt(end)}`;
+            }
+
+            // --- Chart ---
+            function initChart() {
+                const ctx = document
+                    .getElementById("sleepChart")
+                    .getContext("2d");
+                chart = new Chart(ctx, {
+                    type: "line",
+                    data: {
+                        datasets: [
+                            {
+                                label: "Sleep Stage",
+                                data: [],
+                                borderColor: "#ffffff",
+                                borderWidth: 2,
+                                stepped: true, // Key for hypnogram look
+                                pointRadius: 0,
+                                fill: false,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: "time",
+                                time: {
+                                    unit: "minute",
+                                },
+                                grid: {
+                                    display: false,
+                                    color: "rgba(255,255,255,0.1)",
+                                },
+                                ticks: { color: "rgba(255,255,255,0.7)" },
+                            },
+                            y: {
+                                min: 0.5,
+                                max: 3.5,
+                                ticks: {
+                                    callback: function (value) {
+                                        if (value === 3) return "Doz.";
+                                        if (value === 2) return "Snooz.";
+                                        if (value === 1) return "Slumb.";
+                                        return "";
+                                    },
+                                    color: "rgba(255,255,255,0.8)",
+                                    font: { size: 12 },
+                                },
+                                grid: {
+                                    color: "rgba(255,255,255,0.1)",
+                                },
+                            },
+                        },
+                        plugins: {
+                            legend: { display: false },
+                        },
+                    },
+                });
+            }
+
+            function updateChart() {
+                if (!chart) return;
+                chart.data.datasets[0].data = history;
+                chart.update("none"); // Update without full animation for performance
+            }
+        </script>
+    </body>
 </html>
