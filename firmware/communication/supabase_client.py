@@ -49,6 +49,47 @@ class SupabaseClient:
             "Prefer": "return=minimal",  # Don't send back the inserted object, saves bandwidth
         }
 
+    def _get(self, table: str, params: Optional[str] = None) -> List[Dict]:
+        """
+        Internal method to execute raw HTTP GET.
+
+        Args:
+            table: Table name (endpoint)
+            params: Query string parameters (e.g., "?column=value" or PostgREST filters)
+
+        Returns:
+            List of dictionaries if successful, empty list otherwise
+        """
+        conn = None
+        try:
+            conn = http.client.HTTPSConnection(self.host, timeout=10)
+
+            endpoint = f"{self.base_path}/rest/v1/{table}"
+            if params:
+                endpoint += params
+
+            # Use headers without "return=minimal" for GET requests
+            get_headers = {k: v for k, v in self.headers.items() if k != "Prefer"}
+
+            conn.request("GET", endpoint, headers=get_headers)
+            response = conn.getresponse()
+
+            if response.status == 200:
+                data = response.read().decode()
+                return json.loads(data) if data else []
+            else:
+                logger.error(
+                    f"HTTP Error {response.status}: {response.read().decode()}"
+                )
+                return []
+
+        except Exception as e:
+            logger.error(f"GET request failed: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
+
     def _post(self, table: str, payload: Union[Dict[str, Any], List[Dict[str, Any]]]) -> bool:
         """
         Internal method to execute raw HTTP POST.
@@ -127,6 +168,31 @@ class SupabaseClient:
         # Whitelist keys
         allowed_keys = ['created_at', 'device_id', 'user_id', 'voltage', 'force_percent', 'state', 'variance']
         return {k: v for k, v in data.items() if k in allowed_keys}
+
+    def fetch_history(self, days: int = 7, user_id: Optional[str] = None) -> List[Dict]:
+        """
+        Fetch historical readings from Supabase for ML analysis.
+
+        Uses PostgREST filtering to get last N days of data.
+        
+        Args:
+            days: Number of days to fetch (default 7)
+            user_id: Optional user ID filter
+
+        Returns:
+            List of reading dictionaries
+        """
+        # Build PostgREST filter
+        # gte. = greater than or equal, iso format for timestamp
+        from datetime import datetime, timedelta
+        cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
+        
+        # Construct query params
+        params = f"?created_at=gte.{cutoff_date}&order=created_at.asc"
+        if user_id:
+            params += f"&user_id=eq.{user_id}"
+
+        return self._get("readings", params)
 
     def is_configured(self) -> bool:
         """Check if URL and Key are set to something non-empty."""
